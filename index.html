@@ -1944,6 +1944,8 @@ function toast(msg, type='info') {
   setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 3000);
 }
 async function logAction(type, title, detail) {
+  // Practice (tester) mode never writes to the real activity log
+  if (currentUser?.isTester) return;
   try {
     await db.collection('log').add({
       type, title, detail,
@@ -2608,16 +2610,21 @@ async function confirmAdjust() {
   const item = items.find(i => i.id === adjustItemId); if (!item) return;
   const reason = document.getElementById('adj-reason').value.trim();
   const oldLocs = getLocations(item);
-  const newLocs = {};
+  // Start from the current figures so locations not on screen (e.g. a
+  // removed van that still holds stock) are kept as they are.
+  const newLocs = {...oldLocs};
   let changed = false;
   const changes = [];
 
   LOCATIONS.forEach(loc => {
     const inputId = 'adj-loc-' + loc.replace(/\s+/g, '_');
     const el = document.getElementById(inputId);
-    const newVal = Math.max(0, parseInt(el?.value)||0);
     const oldVal = oldLocs[loc]||0;
-    if (newVal > 0) newLocs[loc] = newVal;
+    const typed = parseInt(el?.value);
+    // A location left alone keeps its figure, even if it is negative —
+    // correcting the Yard must not wipe a van's negative-stock flag.
+    const newVal = isNaN(typed) ? 0 : (typed === oldVal ? oldVal : Math.max(0, typed));
+    if (newVal !== 0) newLocs[loc] = newVal; else delete newLocs[loc];
     if (newVal !== oldVal) {
       changed = true;
       changes.push(`${loc}: ${oldVal} → ${newVal}`);
@@ -3474,7 +3481,7 @@ async function exportLog() {
       const e = d.data();
       rows.push([e.ts?.toDate?.()?.toISOString()||'', e.user, e.type, e.title, e.detail]);
     });
-    dl(rows.map(r=>r.map(c=>`"${String(c||'').replace(/"/g,"''")}"`).join(',')).join('\n'),'activity_log_full_history.csv','text/csv');
+    dl(rows.map(r=>r.map(c=>`"${String(c ?? '').replace(/"/g,'""')}"`).join(',')).join('\n'),'activity_log_full_history.csv','text/csv');
     toast(`Exported ${snap.size} entries`, 'success');
   } catch(e) { toast('Export failed: '+e.message, 'error'); }
 }
@@ -3964,7 +3971,10 @@ function chooseStockTakeLocation() {
 async function openStockTake(location) {
   currentStockTakeLocation = location || null;
   stockTakeDraft = {};
-  document.getElementById('stockTakeModalMonth').textContent = fmtDate(new Date());
+  // The title line below replaces this span, so it is gone from the second
+  // opening onwards — guard it, or every stock take after the first fails.
+  const monthEl = document.getElementById('stockTakeModalMonth');
+  if (monthEl) monthEl.textContent = fmtDate(new Date());
   document.getElementById('stocktake-search').value = '';
   const titleEl = document.getElementById('stockTakeModalTitle');
   if (titleEl) titleEl.textContent = currentStockTakeLocation ? `📋 Stock Take — ${currentStockTakeLocation} (${fmtDate(new Date())})` : `📋 Stock Take — All Locations (${fmtDate(new Date())})`;
@@ -4004,8 +4014,11 @@ let previousStockTakeQtyMap = {};
 async function loadPreviousStockTakeQtys(location) {
   previousStockTakeQtyMap = {};
   try {
-    const snap = await db.collection('stocktakes').where('completed','==',true).orderBy('completedAt','desc').limit(15).get();
-    const prev = snap.docs.map(d=>({id:d.id,...d.data()})).find(s => (s.location||null) === (location||null));
+    // Simple query + sort here, so it never needs a Firestore composite index
+    const snap = await db.collection('stocktakes').where('completed','==',true).get();
+    const prev = snap.docs.map(d=>({id:d.id,...d.data()}))
+      .sort((a,b) => (b.completedAt?.toMillis?.()??0) - (a.completedAt?.toMillis?.()??0))
+      .find(s => (s.location||null) === (location||null));
     if (!prev) return;
     const startTs = prev.startedAt, endTs = prev.completedAt || firebase.firestore.Timestamp.now();
     const logSnap = await db.collection('log').where('ts','>=',startTs).where('ts','<=',endTs).orderBy('ts').get();
@@ -4317,7 +4330,7 @@ async function applyStockTakeSheet() {
         diffs.forEach(([loc, n]) => { newLocs[loc] = n; });
         if (diffs.length) {
           batch.update(db.collection('items').doc(item.id), locationsUpdatePayload(newLocs));
-          diffs.forEach(([loc, n]) => batch.set(db.collection('log').doc(), {
+          if (!currentUser?.isTester) diffs.forEach(([loc, n]) => batch.set(db.collection('log').doc(), {
             type: 'qty', title: `Stock take update: ${fresh.name}`,
             detail: `${currentUser.name} corrected ${loc} from ${cur[loc] || 0} to ${n} during stock take`,
             user: currentUser?.name || 'System', ts: firebase.firestore.FieldValue.serverTimestamp() }));
@@ -4463,8 +4476,9 @@ async function applyManualInvoiceToStock() {
       const item = items.find(i=>i.id===row.itemId); if (!item) continue;
       const locs = getLocations(item);
       const oldVal = locs[toLoc]||0, newVal = oldVal + Number(row.qty);
-      await db.collection('items').doc(row.itemId).update({ locations: {...locs, [toLoc]: newVal}, qty: firebase.firestore.FieldValue.delete() });
-      await logAction('invoice', `Invoice: ${item.name}`, `${currentUser.name} added ${row.qty} to ${toLoc}${supplier?' · Supplier: '+supplier:''}${ref?' · Ref: '+ref:''} · ${oldVal}→${newVal}`);
+      // locationsUpdatePayload keeps practice-mode counts away from real stock
+      await db.collection('items').doc(row.itemId).update(locationsUpdatePayload({...locs, [toLoc]: newVal}));
+      if (!currentUser?.isTester) await logAction('invoice', `Invoice: ${item.name}`, `${currentUser.name} added ${row.qty} to ${toLoc}${supplier?' · Supplier: '+supplier:''}${ref?' · Ref: '+ref:''} · ${oldVal}→${newVal}`);
     }
     setSync('ok');
     toast(`Added ${validItems.length} item${validItems.length!==1?'s':''} to ${toLoc}`, 'success');
@@ -6063,7 +6077,8 @@ function exportCSV(){
     const locs=getLocations(i);
     rows.push([i.category||'',i.name||'',i.barcode||'',i.mfr_code||'',totalQty(i),...LOCATIONS.map(l=>locs[l]||0),i.min_qty||0,iStatus(i),keys[0]||'',bp?bp.toFixed(2):'',keys.map(k=>`${k}:£${Number(sups[k].price).toFixed(2)}(${sups[k].code_display||cleanCode(sups[k].code||'')||'-'})`).join('|'),i.notes||'']);
   });
-  dl(rows.map(r=>r.map(c=>`"${String(c||'').replace(/"/g,"''")}"`).join(',')).join('\n'),'rachel_materials.csv','text/csv');
+  // c ?? '' keeps 0 as "0" (c||'' blanked it); "" is the proper CSV escape for an inch mark
+  dl(rows.map(r=>r.map(c=>`"${String(c ?? '').replace(/"/g,'""')}"`).join(',')).join('\n'),'rachel_materials.csv','text/csv');
 }
 function exportReorderCSV(){
   const { groups } = groupedReorderList();
@@ -6083,7 +6098,7 @@ function exportReorderCSV(){
       rows.push(['  '+(i.category||''),i.name||'',i.mfr_code||'',totalQty(i),...LOCATIONS.map(l=>locs[l]||0),i.min_qty||0,iStatus(i),bk,dc,bk?Number(sups[bk].price).toFixed(2):'',bk?orderUrl(bk,sups[bk].code,i):'']);
     });
   });
-  dl(rows.map(r=>r.map(c=>`"${String(c||'').replace(/"/g,"''")}"`).join(',')).join('\n'),'reorder_list.csv','text/csv');
+  dl(rows.map(r=>r.map(c=>`"${String(c ?? '').replace(/"/g,'""')}"`).join(',')).join('\n'),'reorder_list.csv','text/csv');
 }
 function dl(content,filename,type){const a=document.createElement('a');a.href='data:'+type+';charset=utf-8,'+encodeURIComponent(content);a.download=filename;a.click();}
 
@@ -6182,7 +6197,7 @@ function onScanNameSearchInput(query) {
   const matches = items.filter(it => itemMatchesSearch(it, q)).slice(0, 8);
   let html = matches.map(it => `<div onmousedown="selectScanNameSearchItem('${it.id}')" style="padding:9px 10px;cursor:pointer;font-size:13px;color:#e8edf2;border-bottom:1px solid #0f1923" onmouseover="this.style.background='#0f1923'" onmouseout="this.style.background=''">${it.name}</div>`).join('');
   if (!matches.length) html += '<div style="padding:9px 10px;font-size:12px;color:#4a6880">No matches</div>';
-  html += `<div onmousedown="openUnregisteredItemModal('scan', '${query.replace(/'/g,"\\'")}')" style="padding:9px 10px;cursor:pointer;font-size:12px;color:#f0a020;font-weight:600;border-top:1px solid #0f1923">🚩 Can't find it? Log Unregistered Item...</div>`;
+  html += `<div onmousedown="openUnregisteredItemModal('scan', '${query.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;')}')" style="padding:9px 10px;cursor:pointer;font-size:12px;color:#f0a020;font-weight:600;border-top:1px solid #0f1923">🚩 Can't find it? Log Unregistered Item...</div>`;
   resultsEl.innerHTML = html;
   resultsEl.style.display = 'block';
 }
@@ -6774,7 +6789,7 @@ function onJobNameSearchInput(query) {
   const matches = items.filter(it => itemMatchesSearch(it, q)).slice(0, 8);
   let html = matches.map(it => `<div onmousedown="selectJobNameSearchItem('${it.id}')" style="padding:8px 10px;cursor:pointer;font-size:12px;color:#e8edf2;border-bottom:1px solid #0f1e30" onmouseover="this.style.background='#0f1e30'" onmouseout="this.style.background=''">${it.name}</div>`).join('');
   if (!matches.length) html += '<div style="padding:8px 10px;font-size:11px;color:#4a6880">No matches</div>';
-  html += `<div onmousedown="openUnregisteredItemModal('job', '${query.replace(/'/g,"\\'")}')" style="padding:8px 10px;cursor:pointer;font-size:11px;color:#f0a020;font-weight:600;border-top:1px solid #0f1e30">🚩 Can't find it? Log Unregistered Item...</div>`;
+  html += `<div onmousedown="openUnregisteredItemModal('job', '${query.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;')}')" style="padding:8px 10px;cursor:pointer;font-size:11px;color:#f0a020;font-weight:600;border-top:1px solid #0f1e30">🚩 Can't find it? Log Unregistered Item...</div>`;
   resultsEl.innerHTML = html;
   resultsEl.style.display = 'block';
 }
@@ -6996,10 +7011,13 @@ async function loadJobHistory() {
   const el = document.getElementById('jobHistoryList');
   if (!el || !currentUser) return;
   try {
-    const snap = await db.collection('jobs')
-      .where('engineerUid', '==', currentUser.uid || currentUser.name)
-      .where('status', '==', 'completed')
-      .orderBy('completedAt', 'desc').limit(10).get();
+    // One simple filter, then status/sort here — no composite index needed
+    const all = await db.collection('jobs')
+      .where('engineerUid', '==', currentUser.uid || currentUser.name).get();
+    const recent = all.docs.filter(d => d.data().status === 'completed')
+      .sort((a,b) => (b.data().completedAt?.toMillis?.()??0) - (a.data().completedAt?.toMillis?.()??0))
+      .slice(0, 10);
+    const snap = { empty: !recent.length, docs: recent };
     if (snap.empty) {
       el.innerHTML = '<div style="color:#4a6880;font-size:12px;text-align:center;padding:16px 0">No completed jobs yet</div>';
       return;
@@ -7042,11 +7060,14 @@ async function loadJobReport() {
   el.innerHTML = '<div style="color:#4a6880;font-size:12px;text-align:center;padding:12px 0">Loading...</div>';
 
   try {
-    let query = db.collection('jobs').where('status', '==', 'completed').orderBy('completedAt', 'desc');
-    if (engineerFilter) query = query.where('engineerName', '==', engineerFilter);
-    const snap = await query.limit(200).get();
+    // One simple filter, then engineer/sort here — no composite index needed
+    const snap = await db.collection('jobs').where('status', '==', 'completed').get();
 
-    let docs = snap.docs.map(d => ({id: d.id, ...d.data()}));
+    let docs = snap.docs.map(d => ({id: d.id, ...d.data()}))
+      .filter(j => !engineerFilter || j.engineerName === engineerFilter)
+      .filter(j => currentUser?.isTester || !j.isTestData) // practice-mode jobs stay out of real reports
+      .sort((a,b) => (b.completedAt?.toMillis?.()??0) - (a.completedAt?.toMillis?.()??0))
+      .slice(0, 200);
 
     // Client-side date filter (Firestore compound queries are limited)
     if (fromVal) {
@@ -7559,6 +7580,8 @@ let confirmColExtras = []; // [{itemId, name, qty}]
 let currentConfirmItems = []; // the current order's items — read directly instead of scraping the DOM for names
 
 async function openConfirmCollection(id) {
+  // Practice mode must not use up real orders or put items on real jobs
+  if (currentUser?.isTester) { toast('Practice mode: confirming real orders is switched off', 'info'); return; }
   try {
     const doc = await db.collection('deliveries').doc(id).get();
     const d = doc.data();
@@ -7921,7 +7944,7 @@ async function submitJobLeftover() {
         if (!item) continue;
         const locs = {...getLocations(item)};
         locs[r.returnLoc] = (locs[r.returnLoc]||0) + r.returnQty;
-        await db.collection('items').doc(r.id).update({locations: locs});
+        await db.collection('items').doc(r.id).update(locationsUpdatePayload(locs));
       }
       await logAction('job', `Leftover stock returned: ${jobAddress}`,
         returns.map(r=>`${r.name} ×${r.returnQty} → ${r.returnLoc}`).join(', '));

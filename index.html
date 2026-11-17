@@ -345,16 +345,16 @@ td{padding:8px 9px;vertical-align:middle}
   <div class="topbar">
     <div class="topbar-brand">🔧 <span>Rachel's</span></div>
     <div class="tab-bar" id="tabBar">
-      <button class="tab-btn active" onclick="showPage('inventory')">Inventory</button>
-      <button class="tab-btn" onclick="showPage('scan')">📷 Scan</button>
-      <button class="tab-btn" onclick="showPage('job')" style="color:#22c55e;font-weight:600">🔧 Job</button>
-      <button class="tab-btn" onclick="showPage('deliveries')">🚚 Deliveries</button>
-      <button class="tab-btn" onclick="showPage('stocktake')">Stock Take</button>
-      <button class="tab-btn" onclick="showPage('invoice')">Invoice</button>
-      <button class="tab-btn" onclick="showPage('log')">Log</button>
-      <button class="tab-btn" onclick="showPage('help')" style="color:#f0a020">❓ Help</button>
+      <button class="tab-btn active" data-page="inventory" onclick="showPage('inventory')">Inventory</button>
+      <button class="tab-btn" data-page="scan" onclick="showPage('scan')">📷 Scan</button>
+      <button class="tab-btn" data-page="job" onclick="showPage('job')">🔧 Job</button>
+      <button class="tab-btn" data-page="deliveries" onclick="showPage('deliveries')">🚚 Deliveries</button>
+      <button class="tab-btn" data-page="stocktake" onclick="showPage('stocktake')">Stock Take</button>
+      <button class="tab-btn" data-page="invoice" onclick="showPage('invoice')">Invoice</button>
+      <button class="tab-btn" data-page="log" onclick="showPage('log')">Log</button>
+      <button class="tab-btn" data-page="help" onclick="showPage('help')" style="color:#f0a020">❓ Help</button>
       <button class="tab-btn" onclick="openUnregisteredList()" style="position:relative">🚩 Unregistered<span id="unregBadge" style="display:none;background:#3a1a10;color:#f0805a;border-radius:10px;padding:1px 6px;font-size:10px;margin-left:4px"></span></button>
-      <button class="tab-btn admin-only" onclick="showPage('admin')" style="display:none">Admin</button>
+      <button class="tab-btn admin-only" data-page="admin" onclick="showPage('admin')" style="display:none">Admin</button>
     </div>
     <div class="sync-dot ok" id="syncDot" title="Live sync status"></div>
     <div class="ub-avatar" id="ubAvatar"></div>
@@ -563,21 +563,21 @@ td{padding:8px 9px;vertical-align:middle}
 
       <!-- Start a job -->
       <div id="jobSetupSection">
+
+        <!-- Open jobs: stay live until the engineer completes them, no time limit -->
+        <div id="jobOpenJobsSection" style="display:none;background:#1a2840;border:1px solid #2a5080;border-radius:9px;padding:12px;margin-bottom:12px">
+          <div style="font-size:11px;font-weight:700;color:#6b8fad;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Your Open Jobs</div>
+          <div style="font-size:11px;color:#4a6880;margin-bottom:10px">Jobs stay open until you tap "Complete Job". Deliveries for a job are added to it automatically.</div>
+          <div id="jobOpenJobsList"></div>
+        </div>
         <div style="background:#162030;border:1px solid #1e3248;border-radius:9px;padding:14px;margin-bottom:12px">
           <div style="font-size:11px;font-weight:700;color:#6b8fad;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Start New Job</div>
           <input type="text" id="jobAddressInput" placeholder="First line of address + postcode, e.g. 10 Barnside Way, SK10 2TZ" style="width:100%;box-sizing:border-box;padding:9px 12px;background:#0f1e30;border:1px solid #2a4060;border-radius:7px;color:#e8edf2;font-size:13px;outline:none;margin-bottom:10px">
           <button class="btn btn-primary" style="width:100%;padding:10px;font-size:13px;font-weight:600" onclick="startJob()">Start Job</button>
         </div>
-
-        <!-- Open draft if one exists -->
-        <div id="jobExistingDraft" style="display:none;background:#1a2840;border:1px solid #2a5080;border-radius:9px;padding:12px;margin-bottom:12px">
-          <div style="font-size:11px;font-weight:700;color:#6b8fad;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Saved Draft</div>
-          <div id="jobDraftAddressDisplay" style="font-size:13px;color:#e8edf2;font-weight:600;margin-bottom:8px"></div>
-          <div id="jobDraftItemCount" style="font-size:12px;color:#6b8fad;margin-bottom:10px"></div>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-primary" style="flex:1;padding:8px;font-size:12px" onclick="resumeJobDraft()">Resume Draft</button>
-            <button class="btn btn-warn" style="padding:8px 12px;font-size:12px" onclick="discardJobDraft()">Discard</button>
-          </div>
+        <div id="jobOtherOpenJobsSection" style="display:none;background:#162030;border:1px solid #1e3248;border-radius:9px;padding:12px;margin-bottom:12px">
+          <div style="font-size:11px;font-weight:700;color:#6b8fad;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Other Engineers' Open Jobs</div>
+          <div id="jobOtherOpenJobsList"></div>
         </div>
       </div>
 
@@ -587,10 +587,10 @@ td{padding:8px 9px;vertical-align:middle}
         <!-- Job header -->
         <div style="background:#1a2840;border:1px solid #2a5080;border-radius:9px;padding:10px 12px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
           <div>
-            <div style="font-size:10px;color:#6b8fad;text-transform:uppercase;letter-spacing:.4px">Active Job</div>
+            <div style="font-size:10px;color:#6b8fad;text-transform:uppercase;letter-spacing:.4px">Active Job <span style="text-transform:none;letter-spacing:0;color:#4cdf8a">· stays open until you complete it</span></div>
             <div id="jobActiveAddress" style="font-size:13px;font-weight:700;color:#e8edf2;margin-top:2px"></div>
           </div>
-          <button class="btn btn-warn" style="padding:5px 10px;font-size:11px" onclick="cancelJob()">Cancel</button>
+          <button class="btn btn-outline" style="padding:5px 10px;font-size:11px" onclick="showJobList()">☰ My Jobs / New Job</button>
         </div>
 
         <!-- Scanner area -->
@@ -632,6 +632,7 @@ td{padding:8px 9px;vertical-align:middle}
         <button id="jobCompleteBtn" class="btn btn-primary" style="width:100%;padding:12px;font-size:14px;font-weight:700;display:none;background:linear-gradient(135deg,#1a8a4a,#147a3e)" onclick="completeJob()">
           ✅ Complete Job & Deduct Stock
         </button>
+        <button id="jobRemoveEmptyBtn" class="btn btn-outline" style="width:100%;padding:10px;font-size:12px;display:none;margin-top:4px" onclick="removeEmptyJob(jobDraftId)">🗑 Remove This Job (nothing used, started by mistake)</button>
       </div>
 
       <!-- Past jobs -->
@@ -1034,6 +1035,14 @@ td{padding:8px 9px;vertical-align:middle}
     </div>
 
     <div class="field" style="margin-bottom:10px">
+      <label>Goes Onto Job</label>
+      <select id="del-job" onchange="onDeliveryJobSelect(this.value)" style="width:100%;padding:8px;background:#0f1e30;border:1px solid #2a4060;border-radius:6px;color:#e8edf2;font-size:12px;outline:none">
+        <option value="__AUTO__">The job at the address above (found or started automatically)</option>
+      </select>
+      <div style="font-size:10px;color:#4a6880;margin-top:4px">When the order is confirmed, everything on it goes straight onto this job — the engineers just check the quantities and confirm.</div>
+    </div>
+
+    <div class="field" style="margin-bottom:10px">
       <label>Collection / Delivery Address <span style="font-size:10px;color:#4a6880">(where engineer goes to collect, or where delivery arrives)</span></label>
       <input type="text" id="del-delivery-address" placeholder="e.g. Wolseley Branch, Salford" style="width:100%;box-sizing:border-box;padding:8px;background:#0f1e30;border:1px solid #2a4060;border-radius:6px;color:#e8edf2;font-size:12px;outline:none">
     </div>
@@ -1094,9 +1103,19 @@ td{padding:8px 9px;vertical-align:middle}
         <button class="btn btn-outline" style="padding:5px 10px;font-size:11px;margin-top:6px" onclick="addConfirmExtraRow()">+ Add Extra Item</button>
       </div>
 
-      <!-- Allocate locations -->
-      <div style="font-size:11px;font-weight:700;color:#6b8fad;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Where should everything go?</div>
-      <div id="confirmColItems"></div>
+      <!-- Which job it goes onto -->
+      <div id="confirmColJobBox" style="background:#0f2e1a;border:1px solid #1a4a2a;border-radius:8px;padding:12px;margin-bottom:12px">
+        <div style="font-size:12px;font-weight:700;color:#4cdf8a;margin-bottom:8px">🔧 Goes onto job</div>
+        <select id="confirmColJob" onchange="onConfirmColJobChange()" style="width:100%;padding:8px;background:#0f1e30;border:1px solid #2a4060;border-radius:6px;color:#e8edf2;font-size:12px;outline:none"></select>
+        <div id="confirmColJobHint" style="font-size:11px;color:#6b8fad;margin-top:8px">Everything on this order is assigned to this job automatically — nothing else to log.</div>
+        <a href="#" id="confirmColSplitLink" onclick="toggleConfirmColSplit();return false" style="display:inline-block;font-size:11px;color:#6b8fad;text-decoration:underline;margin-top:6px">Some of it is going into stock instead?</a>
+      </div>
+
+      <!-- Allocate locations (stock orders, or when splitting a job order) -->
+      <div id="confirmColLocWrap">
+        <div style="font-size:11px;font-weight:700;color:#6b8fad;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Where should everything go?</div>
+        <div id="confirmColItems"></div>
+      </div>
 
       <!-- Collected by -->
       <div style="background:#1a2840;border:1px solid #2a5080;border-radius:7px;padding:10px 12px;margin:12px 0">
@@ -1116,7 +1135,7 @@ td{padding:8px 9px;vertical-align:middle}
 
       <p id="confirmColErr" style="display:none;color:#ff6b6b;font-size:11px;margin-bottom:8px">Please select a location for every item.</p>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-primary" style="flex:1;padding:10px;font-size:13px;background:linear-gradient(135deg,#1a8a4a,#147a3e)" onclick="confirmCollection()">✅ Confirm &amp; Add to Stock</button>
+        <button class="btn btn-primary" style="flex:1;padding:10px;font-size:13px;background:linear-gradient(135deg,#1a8a4a,#147a3e)" id="confirmColBtn" onclick="confirmCollection()">✅ Confirm &amp; Add to Stock</button>
         <button class="btn btn-outline" style="padding:10px 14px" onclick="closeModal('confirmCollectionModal')">Cancel</button>
       </div>
     </div>
@@ -1792,11 +1811,14 @@ async function loginAs(u) {
   subscribeToItems();
   toast('Welcome, ' + u.name + '!', 'success');
   checkStockTakeDue();
+  // Put any open job back on screen — jobs stay live until the engineer completes them
+  await restoreOpenJobOnLogin();
   // Engineers land on Job tab by default
   if (!isAdmin) showPage('job');
 }
 function logout() {
   if (unsubItems) { unsubItems(); unsubItems = null; }
+  resetJobStateOnLogout();
   currentUser = null; selectedUserId = null; pinBuffer = '';
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('appScreen').classList.remove('visible');
@@ -1938,8 +1960,10 @@ function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-'+name)?.classList.add('active');
-  document.querySelectorAll('.tab-btn').forEach(b => {
-    if (b.textContent.toLowerCase().includes(name.substring(0,3).toLowerCase())) b.classList.add('active');
+  // Match on data-page (the old first-3-letters text match lit up Inventory
+  // AND Invoice together, since both start "inv").
+  document.querySelectorAll('.tab-btn[data-page]').forEach(b => {
+    if (b.dataset.page === name) b.classList.add('active');
   });
   if (name === 'log') loadLog();
   if (name === 'admin') { refreshAndRenderAdminPanel(); updateNewItemsBadge(); loadOneDriveConfig(); }
@@ -6407,97 +6431,261 @@ async function printSelectedLabels() {
 // ════════════════════════════════════════
 let jobActive = false;
 let jobAddress = '';
-let jobItems = []; // [{id, name, barcode, qty}]
-let jobDraftId = null;
+let jobItems = [];          // added by the engineer on site: [{id, name, barcode, qty, location}]
+let jobDeliveryItems = [];  // added automatically when a delivery for this job is confirmed
+let jobDraftId = null;      // Firestore id of the job open on this device (name kept from the old "draft" days)
 let jobCodeReader = null;
 let jobScanActive = false;
 let jobScanCooldown = false;
+let myOpenJobs = [];
+let otherOpenJobs = [];
+let unsubCurrentJob = null;
+let jobListView = false;    // true when the engineer has stepped back to the job list on purpose
+
+// A job stays live until the engineer taps Complete Job — there is no time
+// limit. 'draft' is how open jobs were stored before Nov 2026; both count.
+const OPEN_JOB_STATUSES = ['draft', 'open'];
+
+function myJobUid(u) { u = u || currentUser; return u ? (u.uid || u.name) : ''; }
+function jobUidForName(name) { const u = users.find(x => x.name === name); return u ? (u.uid || u.name) : name; }
+function tsMillis(t) { return t?.toMillis?.() ?? (t instanceof Date ? t.getTime() : 0); }
+function lastJobKey() { return 'hm_current_job_' + myJobUid(); }
+function escJobHtml(t) { return String(t ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// Loose address match so "10 Barnside Way, SK10 2TZ" and
+// "10 Barnside Way, Macclesfield SK10 2TZ" count as the same job.
+function normJobAddress(a) { return String(a || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
+function jobPostcode(a) {
+  const m = String(a || '').toUpperCase().match(/\b([A-Z]{1,2}\d[A-Z\d]?)\s*(\d[A-Z]{2})\b/);
+  return m ? m[1] + m[2] : '';
+}
+function sameJobAddress(a, b) {
+  const na = normJobAddress(a), nb = normJobAddress(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const pa = jobPostcode(a), pb = jobPostcode(b);
+  if (pa && pa === pb) {
+    const ha = na.split(' ')[0], hb = nb.split(' ')[0];
+    return ha === hb; // same postcode and same house number/name
+  }
+  return false;
+}
+
+async function fetchOpenJobs() {
+  const snap = await db.collection('jobs').where('status', 'in', OPEN_JOB_STATUSES).get();
+  return snap.docs.map(d => ({id: d.id, ...d.data()}))
+    .filter(j => currentUser?.isTester || !j.isTestData)
+    .sort((a, b) => tsMillis(b.updatedAt) - tsMillis(a.updatedAt));
+}
+
+function jobLineCounts(j) {
+  const scanned = (j.items || []).reduce((s, i) => s + (Number(i.qty) || 0), 0);
+  const delivered = (j.deliveryItems || []).reduce((s, i) => s + (Number(i.qty) || 0), 0);
+  return {scanned, delivered, empty: !(j.items || []).length && !(j.deliveryItems || []).length};
+}
 
 function renderJobPage() {
-  loadJobDraft();
+  showJobView();
+  refreshMyOpenJobs().then(() => {
+    // Nothing open on this device and the engineer didn't step back on
+    // purpose: put their live job straight back on screen.
+    if (!jobActive && !jobListView && myOpenJobs.length) {
+      let last = null; try { last = localStorage.getItem(lastJobKey()); } catch(e) {}
+      const pick = myOpenJobs.find(j => j.id === last) || myOpenJobs[0];
+      openJob(pick.id);
+    }
+  });
   loadJobHistory();
 }
 
-// ── Draft persistence ──
-async function loadJobDraft() {
+// Kept for older callers — the job list replaces the single saved draft.
+function loadJobDraft() { return refreshMyOpenJobs(); }
+
+async function refreshMyOpenJobs() {
   if (!currentUser) return;
   try {
-    const snap = await db.collection('jobs')
-      .where('engineerUid', '==', currentUser.uid || currentUser.name)
-      .where('status', '==', 'draft')
-      .orderBy('updatedAt', 'desc').limit(1).get();
-    if (!snap.empty) {
-      const doc = snap.docs[0];
-      const data = doc.data();
-      jobDraftId = doc.id;
-      document.getElementById('jobExistingDraft').style.display = 'block';
-      document.getElementById('jobDraftAddressDisplay').textContent = data.address;
-      document.getElementById('jobDraftItemCount').textContent =
-        `${(data.items||[]).length} item type(s) saved`;
-    } else {
-      document.getElementById('jobExistingDraft').style.display = 'none';
-      jobDraftId = null;
-    }
-  } catch(e) { console.warn('Draft load failed', e); }
+    const all = await fetchOpenJobs();
+    const me = myJobUid();
+    myOpenJobs = all.filter(j => j.engineerUid === me || (!j.engineerUid && j.engineerName === currentUser.name));
+    otherOpenJobs = currentUser.role === 'admin' ? all.filter(j => !myOpenJobs.includes(j)) : [];
+  } catch(e) {
+    console.warn('Open jobs load failed', e);
+    const el = document.getElementById('jobOpenJobsList');
+    if (el) { el.innerHTML = `<div style="color:#ff6b6b;font-size:12px">Could not load your open jobs: ${escJobHtml(e.message)}</div>`; document.getElementById('jobOpenJobsSection').style.display = 'block'; }
+    return;
+  }
+  renderOpenJobsList();
+}
+
+function openJobCard(j, mine) {
+  const c = jobLineCounts(j);
+  const started = j.createdAt?.toDate?.();
+  const startedStr = started ? 'Started ' + started.toLocaleDateString('en-GB', {day:'numeric', month:'short'}) : '';
+  const bits = [];
+  if (c.scanned) bits.push(`${c.scanned} used`);
+  if (c.delivered) bits.push(`📦 ${c.delivered} from deliveries`);
+  if (!bits.length) bits.push('Nothing added yet');
+  const isCurrent = j.id === jobDraftId && jobActive;
+  return `<div style="background:#0f1e30;border:1px solid ${isCurrent ? '#3a7bd5' : '#1e3248'};border-radius:7px;padding:9px 11px;margin-bottom:7px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+    <div style="flex:1;min-width:0">
+      <div style="font-size:13px;font-weight:600;color:#e8edf2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escJobHtml(j.address)}</div>
+      <div style="font-size:11px;color:#6b8fad;margin-top:2px">${mine ? '' : escJobHtml(j.engineerName || '?') + ' · '}${bits.join(' · ')}${startedStr ? ' · ' + startedStr : ''}</div>
+    </div>
+    ${mine ? `<div style="display:flex;gap:6px">
+      <button class="btn btn-primary" style="padding:6px 12px;font-size:12px" data-jobid="${j.id}" onclick="openJob(this.dataset.jobid)">${isCurrent ? 'Back to job' : 'Open'}</button>
+      ${c.empty ? `<button class="btn btn-warn" style="padding:6px 9px;font-size:11px" data-jobid="${j.id}" onclick="removeEmptyJob(this.dataset.jobid)" title="Remove — nothing has been added to this job">🗑</button>` : ''}
+    </div>` : ''}
+  </div>`;
+}
+
+function renderOpenJobsList() {
+  const sec = document.getElementById('jobOpenJobsSection');
+  const el = document.getElementById('jobOpenJobsList');
+  if (sec && el) {
+    sec.style.display = myOpenJobs.length ? 'block' : 'none';
+    el.innerHTML = myOpenJobs.map(j => openJobCard(j, true)).join('');
+  }
+  const osec = document.getElementById('jobOtherOpenJobsSection');
+  const oel = document.getElementById('jobOtherOpenJobsList');
+  if (osec && oel) {
+    osec.style.display = otherOpenJobs.length ? 'block' : 'none';
+    oel.innerHTML = otherOpenJobs.map(j => openJobCard(j, false)).join('');
+  }
+}
+
+function showJobView() {
+  const setup = document.getElementById('jobSetupSection');
+  const active = document.getElementById('jobActiveSection');
+  const hist = document.getElementById('jobHistorySection');
+  if (setup) setup.style.display = jobActive ? 'none' : 'block';
+  if (active) active.style.display = jobActive ? 'block' : 'none';
+  if (hist) hist.style.display = jobActive ? 'none' : 'block';
+  if (jobActive) {
+    document.getElementById('jobActiveAddress').textContent = jobAddress;
+    renderJobItemList();
+  }
+}
+
+async function openJob(id) {
+  if (!id) return;
+  try {
+    const doc = await db.collection('jobs').doc(id).get();
+    if (!doc.exists) { toast('That job no longer exists', 'error'); refreshMyOpenJobs(); return; }
+    const data = doc.data();
+    if (!OPEN_JOB_STATUSES.includes(data.status)) { toast('That job has already been completed', 'info'); refreshMyOpenJobs(); return; }
+    setCurrentJob(id, data);
+  } catch(e) { toast('Could not open job: ' + e.message, 'error'); }
+}
+
+function setCurrentJob(id, data) {
+  jobDraftId = id;
+  jobAddress = data.address || '';
+  jobItems = data.items || [];
+  jobDeliveryItems = data.deliveryItems || [];
+  jobActive = true;
+  jobListView = false;
+  try { localStorage.setItem(lastJobKey(), id); } catch(e) {}
+  subscribeCurrentJob(id);
+  openJobActive();
+}
+
+// Live link to the open job, so items from a delivery confirmed on another
+// phone (or by the office) appear on the engineer's list straight away.
+function subscribeCurrentJob(id) {
+  unsubscribeCurrentJob();
+  try {
+    unsubCurrentJob = db.collection('jobs').doc(id).onSnapshot(doc => {
+      if (id !== jobDraftId || !jobActive) return;
+      if (!doc.exists) { toast('This job was removed', 'info'); closeCurrentJobLocal(); return; }
+      const d = doc.data();
+      if (!OPEN_JOB_STATUSES.includes(d.status)) { toast('This job was completed on another device', 'info'); closeCurrentJobLocal(); return; }
+      const next = d.deliveryItems || [];
+      if (JSON.stringify(next) !== JSON.stringify(jobDeliveryItems)) {
+        const added = next.length - jobDeliveryItems.length;
+        jobDeliveryItems = next;
+        renderJobItemList();
+        if (added > 0) toast(`📦 ${added} item line(s) from a delivery added to this job`, 'success');
+      }
+    }, err => console.warn('Job listener failed', err));
+  } catch(e) { console.warn('Job listener failed', e); }
+}
+function unsubscribeCurrentJob() { if (unsubCurrentJob) { try { unsubCurrentJob(); } catch(e) {} unsubCurrentJob = null; } }
+
+// Takes the job off this screen only — it stays open in the database.
+function closeCurrentJobLocal() {
+  unsubscribeCurrentJob();
+  stopJobScanner();
+  jobActive = false; jobDraftId = null; jobAddress = ''; jobItems = []; jobDeliveryItems = [];
+  showJobView();
+  refreshMyOpenJobs();
+  loadJobHistory();
 }
 
 async function saveDraftToFirestore() {
   if (!currentUser) return;
+  // Only the engineer's own lines and the address are written here. Delivery
+  // lines live in deliveryItems and are never overwritten from this phone.
   const payload = {
     address: jobAddress,
     items: jobItems,
-    engineerUid: currentUser.uid || currentUser.name,
-    engineerName: currentUser.name,
-    status: 'draft',
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   };
   try {
     if (jobDraftId) {
       await db.collection('jobs').doc(jobDraftId).update(payload);
     } else {
-      const ref = await db.collection('jobs').add({...payload, createdAt: firebase.firestore.FieldValue.serverTimestamp()});
+      const ref = await db.collection('jobs').add({...payload, status: 'open', deliveryItems: [], engineerUid: myJobUid(), engineerName: currentUser.name,
+        isTestData: !!currentUser?.isTester, createdAt: firebase.firestore.FieldValue.serverTimestamp()});
       jobDraftId = ref.id;
+      subscribeCurrentJob(ref.id);
     }
     document.getElementById('jobDraftBadge').style.display = 'inline';
     setTimeout(() => document.getElementById('jobDraftBadge').style.display = 'none', 2000);
-  } catch(e) { console.warn('Draft save failed', e); }
+  } catch(e) { console.warn('Job save failed', e); toast('Could not save the job: ' + e.message, 'error'); }
 }
 
-// ── Start / Resume / Discard ──
-function startJob() {
+// ── Start / open / step back ──
+async function startJob() {
   const addr = document.getElementById('jobAddressInput').value.trim();
   if (!addr) { toast('Please enter the job site\'s first line of address and postcode', 'error'); return; }
-  jobAddress = addr;
-  jobItems = [];
-  jobDraftId = null;
-  jobActive = true;
-  openJobActive();
-  saveDraftToFirestore();
+  const twin = myOpenJobs.find(j => sameJobAddress(j.address, addr));
+  if (twin && confirm(`You already have an open job at "${twin.address}". Open that one instead of starting another?`)) {
+    document.getElementById('jobAddressInput').value = '';
+    return openJob(twin.id);
+  }
+  const ref = db.collection('jobs').doc();
+  const data = {
+    address: addr, items: [], deliveryItems: [],
+    engineerUid: myJobUid(), engineerName: currentUser.name,
+    status: 'open', isTestData: !!currentUser?.isTester,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  document.getElementById('jobAddressInput').value = '';
+  setCurrentJob(ref.id, data); // on screen straight away, even on poor signal
+  try { await ref.set(data); refreshMyOpenJobs(); }
+  catch(e) { toast('Could not save the new job: ' + e.message, 'error'); }
 }
 
-async function resumeJobDraft() {
-  if (!jobDraftId) return;
-  try {
-    const doc = await db.collection('jobs').doc(jobDraftId).get();
-    const data = doc.data();
-    jobAddress = data.address;
-    jobItems = data.items || [];
-    jobActive = true;
-    openJobActive();
-    renderJobItemList();
-  } catch(e) { toast('Could not load draft', 'error'); }
-}
+// Kept so any old button/link still works.
+function resumeJobDraft() { return openJob(jobDraftId || myOpenJobs[0]?.id); }
 
-async function discardJobDraft() {
-  if (!jobDraftId) return;
-  if (!confirm('Discard this saved draft?')) return;
+async function removeEmptyJob(id) {
+  if (!id) return;
   try {
-    await db.collection('jobs').doc(jobDraftId).delete();
-    jobDraftId = null;
-    document.getElementById('jobExistingDraft').style.display = 'none';
-    toast('Draft discarded', 'info');
-  } catch(e) { toast('Could not discard draft', 'error'); }
+    const doc = await db.collection('jobs').doc(id).get();
+    if (!doc.exists) { refreshMyOpenJobs(); return; }
+    const c = jobLineCounts(doc.data());
+    if (!c.empty) { toast('This job has items on it — complete it instead of removing it', 'error'); return; }
+    if (!confirm(`Remove the job at "${doc.data().address}"? Nothing has been added to it.`)) return;
+    if (id === jobDraftId) unsubscribeCurrentJob();
+    await db.collection('jobs').doc(id).delete();
+    try { if (localStorage.getItem(lastJobKey()) === id) localStorage.removeItem(lastJobKey()); } catch(e) {}
+    toast('Job removed', 'info');
+    if (id === jobDraftId) closeCurrentJobLocal(); else refreshMyOpenJobs();
+  } catch(e) { toast('Could not remove job: ' + e.message, 'error'); }
 }
+function discardJobDraft() { return removeEmptyJob(jobDraftId); }
 
 function openJobActive() {
   document.getElementById('jobSetupSection').style.display = 'none';
@@ -6507,16 +6695,31 @@ function openJobActive() {
   renderJobItemList();
 }
 
-function cancelJob() {
-  if (!confirm('Cancel this job? The draft will remain saved.')) return;
-  stopJobScanner();
-  jobActive = false;
-  document.getElementById('jobSetupSection').style.display = 'block';
-  document.getElementById('jobActiveSection').style.display = 'none';
-  document.getElementById('jobHistorySection').style.display = 'block';
-  document.getElementById('jobAddressInput').value = '';
-  loadJobDraft();
-  loadJobHistory();
+// Steps back to the job list. The job stays open — only "Complete Job" closes it.
+function showJobList() {
+  jobListView = true;
+  closeCurrentJobLocal();
+}
+function cancelJob() { showJobList(); }
+
+// After login: put the engineer's live job back without them having to find it.
+async function restoreOpenJobOnLogin() {
+  jobListView = false;
+  try {
+    await refreshMyOpenJobs();
+    if (!jobActive && myOpenJobs.length) {
+      let last = null; try { last = localStorage.getItem(lastJobKey()); } catch(e) {}
+      const pick = myOpenJobs.find(j => j.id === last) || myOpenJobs[0];
+      setCurrentJob(pick.id, pick);
+    }
+  } catch(e) { console.warn('Could not restore open job', e); }
+}
+
+function resetJobStateOnLogout() {
+  unsubscribeCurrentJob();
+  try { stopJobScanner(); } catch(e) {}
+  jobActive = false; jobDraftId = null; jobAddress = ''; jobItems = []; jobDeliveryItems = [];
+  myOpenJobs = []; otherOpenJobs = []; jobListView = false;
 }
 
 // ── Scanner ──
@@ -6633,18 +6836,30 @@ function renderJobItemList() {
   const count = document.getElementById('jobItemCount');
   const clearBtn = document.getElementById('jobClearBtn');
   const completeBtn = document.getElementById('jobCompleteBtn');
-  if (!jobItems.length) {
+  const removeBtn = document.getElementById('jobRemoveEmptyBtn');
+  const del = jobDeliveryItems || [];
+  if (!jobItems.length && !del.length) {
     list.innerHTML = '<div style="color:#4a6880;font-size:12px;text-align:center;padding:16px 0">No items scanned yet</div>';
     count.textContent = '';
     clearBtn.style.display = 'none';
     completeBtn.style.display = 'none';
+    if (removeBtn) removeBtn.style.display = jobDraftId ? 'block' : 'none';
     return;
   }
-  const total = jobItems.reduce((s, i) => s + i.qty, 0);
+  if (removeBtn) removeBtn.style.display = 'none';
+  const total = jobItems.reduce((s, i) => s + i.qty, 0) + del.reduce((s, i) => s + (Number(i.qty) || 0), 0);
   count.textContent = `(${total} unit${total!==1?'s':''})`;
-  clearBtn.style.display = 'inline';
+  clearBtn.style.display = jobItems.length ? 'inline' : 'none';
   completeBtn.style.display = 'block';
-  list.innerHTML = jobItems.map((ji, idx) => `
+  const deliveryHtml = del.map(di => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #1e3248;gap:8px;flex-wrap:wrap">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:#e8edf2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escJobHtml(di.name)} <span style="font-size:9px;color:#4cdf8a;font-weight:700">📦 FROM DELIVERY</span></div>
+        <div style="font-size:11px;color:#4a6880">${escJobHtml(di.barcode || '')}${di.supplier ? ' · ' + escJobHtml(di.supplier) : ''}${di.confirmedBy ? ' · confirmed by ' + escJobHtml(di.confirmedBy) : ''}</div>
+      </div>
+      <span style="font-size:14px;font-weight:700;color:#4cdf8a;min-width:20px;text-align:center;margin-left:8px">${di.qty}</span>
+    </div>`).join('');
+  list.innerHTML = deliveryHtml + jobItems.map((ji, idx) => `
     <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #1e3248;gap:8px;flex-wrap:wrap">
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:600;color:#e8edf2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ji.name}${ji.fromDelivery?' <span style="font-size:9px;color:#4cdf8a;font-weight:700">📦 FROM DELIVERY</span>':''}</div>
@@ -6659,7 +6874,7 @@ function renderJobItemList() {
         <button onclick="jobAdjQty(${idx},1)" style="background:#1e3248;border:none;color:#e8edf2;width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:14px;line-height:1">+</button>
         <button onclick="jobRemoveItem(${idx})" style="background:#3a1010;border:none;color:#ff6b6b;width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:11px">✕</button>
       </div>
-    </div>`).join('');
+    </div>`).join('') + (del.length ? '<div style="font-size:10px;color:#4a6880;margin-top:6px">📦 Delivery items went straight to this job, so they never touch van or yard stock. Anything left over can be put into stock when you complete the job.</div>' : '');
 }
 
 function jobSetItemLocation(idx, location) {
@@ -6688,8 +6903,27 @@ function clearJobList() {
 
 // ── Complete Job ──
 async function completeJob() {
-  if (!jobItems.length) { toast('No items to deduct', 'error'); return; }
-  if (!confirm(`Complete job at "${jobAddress}" and deduct ${jobItems.reduce((s,i)=>s+i.qty,0)} units from the locations shown against each item?`)) return;
+  if (!jobDraftId) { toast('No job open', 'error'); return; }
+  // Stop listening first: the status change below would otherwise be seen
+  // as "completed on another device" and clear the screen mid-way.
+  unsubscribeCurrentJob();
+  try {
+    const fresh = await db.collection('jobs').doc(jobDraftId).get();
+    if (fresh.exists && !OPEN_JOB_STATUSES.includes(fresh.data().status)) {
+      toast('This job has already been completed', 'info'); closeCurrentJobLocal(); return;
+    }
+    if (fresh.exists) jobDeliveryItems = fresh.data().deliveryItems || jobDeliveryItems;
+  } catch(e) { console.warn('Could not refresh delivery lines before completing', e); }
+  const deliveryLines = (jobDeliveryItems || []).map(d => ({ id: d.id, name: d.name, barcode: d.barcode || '', qty: Number(d.qty) || 0, fromDelivery: true, deliveryId: d.deliveryId || null, supplier: d.supplier || '' }));
+  const allLines = [...deliveryLines, ...jobItems];
+  if (!allLines.length) { subscribeCurrentJob(jobDraftId); toast('No items on this job yet', 'error'); return; }
+  const deductUnits = jobItems.filter(i => !i.fromDelivery).reduce((s,i)=>s+i.qty,0);
+  const deliveredUnits = allLines.filter(i => i.fromDelivery).reduce((s,i)=>s+i.qty,0);
+  const msg = `Complete the job at "${jobAddress}"?\n\n` +
+    (deductUnits ? `${deductUnits} unit(s) will be taken off the stock locations shown against each item.\n` : '') +
+    (deliveredUnits ? `${deliveredUnits} unit(s) from deliveries are already on the job (no stock change).\n` : '') +
+    `\nThe job will then be closed.`;
+  if (!confirm(msg)) { subscribeCurrentJob(jobDraftId); return; }
 
   stopJobScanner();
   const vanLocation = currentUser.name + "'s Van"; // fallback for any item added before this feature existed
@@ -6712,44 +6946,47 @@ async function completeJob() {
       await recordMyAction({ type: 'job', itemId: ji.id, itemName: item.name, location: useLoc, qty: ji.qty, job: jobAddress });
     }
 
-    // Save completed job to Firestore
+    // Save completed job — items holds every line (delivery + used) so job
+    // reports and material costs include deliveries.
     const jobPayload = {
       address: jobAddress,
-      items: jobItems,
-      engineerUid: currentUser.uid || currentUser.name,
-      engineerName: currentUser.name,
+      items: allLines,
       vanLocation,
       status: 'completed',
       isTestData: !!currentUser?.isTester,
+      completedBy: currentUser.name,
       completedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
-    if (jobDraftId) {
-      await db.collection('jobs').doc(jobDraftId).update(jobPayload);
-    } else {
-      await db.collection('jobs').add({...jobPayload, createdAt: firebase.firestore.FieldValue.serverTimestamp()});
-    }
+    const completedJobId = jobDraftId, completedAddress = jobAddress;
+    await db.collection('jobs').doc(completedJobId).update(jobPayload);
+    try { if (localStorage.getItem(lastJobKey()) === completedJobId) localStorage.removeItem(lastJobKey()); } catch(e) {}
+    // Closed: take it off the screen now so it can't be completed twice,
+    // even if the leftover box below is dismissed.
+    jobActive = false; jobDraftId = null; jobItems = []; jobDeliveryItems = []; jobAddress = '';
+    showJobView();
 
     if (!currentUser?.isTester) {
-      await logAction('job', `Job completed: ${jobAddress}`,
-        `${currentUser.name} used ${jobItems.reduce((s,i)=>s+i.qty,0)} items — ${jobItems.map(i=>i.name+'×'+i.qty).join(', ')}`);
+      await logAction('job', `Job completed: ${completedAddress}`,
+        `${currentUser.name} closed the job — ${allLines.map(i=>i.name+'×'+i.qty+(i.fromDelivery?' (delivery)':'')).join(', ')}`);
     }
 
     setSync('ok');
     if (wentNegative.length) {
       toast(`Job completed — ${wentNegative.length} item(s) went negative, flagged for review`, 'error');
       console.warn('Went negative:', wentNegative);
-      if (!currentUser?.isTester) await logAction('edit', `Negative stock from job: ${jobAddress}`, `${currentUser.name}'s job took these below zero — needs restocking or correcting: ${wentNegative.join(', ')}`);
+      if (!currentUser?.isTester) await logAction('edit', `Negative stock from job: ${completedAddress}`, `${currentUser.name}'s job took these below zero — needs restocking or correcting: ${wentNegative.join(', ')}`);
     } else {
       toast('Job complete! Now allocate any leftover stock.', 'success');
     }
 
     // Open leftover allocation modal before fully resetting
     stopJobScanner();
-    openJobLeftoverModal(jobItems, jobAddress, jobDraftId);
+    openJobLeftoverModal(allLines, completedAddress, completedJobId);
 
   } catch(e) {
     setSync('err');
+    if (jobDraftId) subscribeCurrentJob(jobDraftId);
     toast('Error completing job: ' + e.message, 'error');
   }
 }
@@ -7080,6 +7317,11 @@ function deliveryCard(id, d, confirmed) {
     ${d.deliveryAddress?`<div style="font-size:11px;color:#4cdf8a;margin-bottom:4px">📍 ${d.deliveryAddress}</div>`:''}
     ${dateStr?`<div style="font-size:11px;color:#f0a020;margin-bottom:4px">📅 ${dateStr}</div>`:''}
     ${d.assignedTo?`<div style="font-size:11px;color:#6b8fad;margin-bottom:4px">👤 ${d.assignedTo}</div>`:''}
+    ${d.destination==='stock'
+      ? `<div style="font-size:11px;color:#8ab4d8;margin-bottom:4px">📦 Into stock</div>`
+      : (confirmed && !d.jobId)
+        ? ''
+        : `<div style="font-size:11px;color:#4cdf8a;margin-bottom:4px">🔧 ${confirmed ? 'Assigned to job' : 'Goes onto job'}: ${escJobHtml(d.jobAddress || d.customerAddress || '')}</div>`}
     <div style="font-size:11px;color:#4a6880;margin-bottom:${confirmed?4:8}px">${itemSummary}</div>
     ${d.notes?`<div style="font-size:11px;color:#4a6880;font-style:italic;margin-bottom:8px">${d.notes}</div>`:''}
     ${confirmed
@@ -7122,6 +7364,11 @@ function openNewDelivery() {
     if (errEl) errEl.style.display = 'none';
 
     renderDeliveryItemRows();
+    fillDeliveryJobSelect('__AUTO__');
+
+    // Reset the save button in case an earlier Edit left it as "Update Order"
+    const saveBtn = document.querySelector('#newDeliveryModal .btn-primary');
+    if (saveBtn) { saveBtn.textContent = 'Create Order'; saveBtn.onclick = saveDelivery; }
 
     const modal = document.getElementById('newDeliveryModal');
     if (!modal) { toast('Modal not found — please reload', 'error'); return; }
@@ -7186,6 +7433,38 @@ function triggerDelItemAddNew(i) {
   openAdd();
 }
 
+// ── Order → job link ──
+let deliveryOpenJobs = [];
+async function fillDeliveryJobSelect(selected) {
+  const sel = document.getElementById('del-job');
+  if (!sel) return;
+  delete sel.dataset.touched;
+  const build = (jobs, want) => {
+    sel.innerHTML = `<option value="__AUTO__">The job at the address above (found or started automatically)</option>` +
+      (jobs.length ? `<optgroup label="Open jobs">${jobs.map(j => `<option value="${j.id}">🔧 ${escJobHtml(j.address)} — ${escJobHtml(j.engineerName || '?')}</option>`).join('')}</optgroup>` : '') +
+      `<option value="__STOCK__">Not for a job — goes into stock</option>`;
+    sel.value = [...sel.options].some(o => o.value === want) ? want : '__AUTO__';
+  };
+  build([], selected);
+  try { deliveryOpenJobs = await fetchOpenJobs(); } catch(e) { console.warn('Open jobs load failed', e); deliveryOpenJobs = []; }
+  build(deliveryOpenJobs, sel.dataset.touched ? sel.value : selected);
+}
+function onDeliveryJobSelect(v) {
+  const sel = document.getElementById('del-job');
+  if (sel) sel.dataset.touched = '1';
+  const job = deliveryOpenJobs.find(j => j.id === v);
+  if (!job) return;
+  const addrEl = document.getElementById('del-customer-address');
+  if (addrEl && !addrEl.value.trim()) addrEl.value = job.address || '';
+  const engEl = document.getElementById('del-engineer');
+  if (engEl && !engEl.value && job.engineerName) engEl.value = job.engineerName;
+}
+function deliveryJobFields() {
+  const v = document.getElementById('del-job')?.value || '__AUTO__';
+  const job = deliveryOpenJobs.find(j => j.id === v);
+  return { destination: v === '__STOCK__' ? 'stock' : 'job', jobId: job ? job.id : null, jobAddress: job ? job.address : null };
+}
+
 async function saveDelivery() {
   const customerAddress = document.getElementById('del-customer-address').value.trim();
   const validItems = deliveryItemRowData.filter(r=>r.itemId&&r.qty>0);
@@ -7202,6 +7481,7 @@ async function saveDelivery() {
     expectedDate: document.getElementById('del-date').value || null,
     notes: document.getElementById('del-notes').value.trim(),
     items: validItems.map(r=>({itemId:r.itemId, name:r.name, qty:Number(r.qty)})),
+    ...deliveryJobFields(),
     status: 'pending',
     createdBy: currentUser.name,
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -7243,6 +7523,7 @@ async function editDelivery(id) {
     sel.innerHTML = '<option value="">Any engineer</option>' +
       users.map(u=>`<option value="${u.name}"${u.name===d.assignedTo?' selected':''}>${u.name}</option>`).join('');
     renderDeliveryItemRows();
+    fillDeliveryJobSelect(d.destination === 'stock' ? '__STOCK__' : (d.jobId || '__AUTO__'));
     document.getElementById('deliveryErr').style.display='none';
     // Swap save button to update
     const btn = document.querySelector('#newDeliveryModal .btn-primary');
@@ -7262,6 +7543,7 @@ async function editDelivery(id) {
           expectedDate:document.getElementById('del-date').value||null,
           notes:document.getElementById('del-notes').value.trim(),
           items:validItems.map(r=>({itemId:r.itemId,name:r.name,qty:Number(r.qty)})),
+          ...deliveryJobFields(),
           updatedAt:firebase.firestore.FieldValue.serverTimestamp()
         });
         setSync('ok'); closeModal('newDeliveryModal'); toast('Order updated','success'); renderDeliveriesPage();
@@ -7303,13 +7585,17 @@ async function openConfirmCollection(id) {
     // Extra items section
     document.getElementById('confirmColExtraRows').innerHTML = '';
 
-    // Build location rows (called again when qtys change)
-    rebuildColLocationRows();
-
     // Collected-by dropdown
     const engSel = document.getElementById('confirmColEngineer');
     engSel.innerHTML = users.map(u=>`<option value="${u.name}">${u.name}</option>`).join('');
     if (currentUser) engSel.value = currentUser.name;
+
+    // Which job it goes onto, then build the rows (rebuilt when qtys change)
+    confirmColOrder = d;
+    confirmColSplit = false;
+    document.getElementById('confirmColItems').innerHTML = '';
+    await fillConfirmColJobSelect(d);
+    applyConfirmColMode();
 
     document.getElementById('confirmColErr').style.display = 'none';
     document.getElementById('confirmCollectionModal').classList.add('open');
@@ -7337,6 +7623,17 @@ function rebuildColLocationRows() {
 
   if (!allRows.length) { itemsEl.innerHTML='<div style="color:#4a6880;font-size:12px;text-align:center;padding:10px">No items with qty > 0</div>'; return; }
 
+  // Keep what was already picked when the rows are rebuilt (qty change etc.)
+  const prevPick = {};
+  itemsEl.querySelectorAll('select[id^="col-"]').forEach(sel => { prevPick[sel.id] = sel.value; });
+  const jobMode = (document.getElementById('confirmColJob')?.value || '__STOCK__') !== '__STOCK__';
+  const locOptions = key => {
+    const cur = prevPick[key] ?? (jobMode ? '__JOB__' : '');
+    return `<option value="">Select location...</option>` +
+      (jobMode ? `<option value="__JOB__"${cur==='__JOB__'?' selected':''}>🔧 Onto the job</option>` : '') +
+      LOCATIONS.map(l=>`<option value="${l}"${cur===l?' selected':''}>${l}</option>`).join('');
+  };
+
   itemsEl.innerHTML = allRows.map(row => `
     <div style="background:#0f1e30;border:1px solid ${row.isExtra?'#2a5020':'#1e3248'};border-radius:7px;padding:9px 11px;margin-bottom:7px">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
@@ -7347,9 +7644,7 @@ function rebuildColLocationRows() {
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:11px;color:#6b8fad">Add to:</span>
           <select id="${row.key}" style="padding:6px 8px;background:#1a2840;border:1px solid #2a4060;border-radius:6px;color:#e8edf2;font-size:12px;outline:none">
-            <option value="">Select location...</option>
-            ${jobActive && jobAddress ? `<option value="__JOB__">🔧 Use directly on job: ${jobAddress}</option>` : ''}
-            ${LOCATIONS.map(l=>`<option value="${l}">${l}</option>`).join('')}
+            ${locOptions(row.key)}
           </select>
         </div>
       </div>
@@ -7408,30 +7703,94 @@ function removeExtraRow(idx) {
   rebuildColLocationRows();
 }
 
+// ── Which job a delivery goes onto ──
+let confirmColOpenJobs = [];
+let confirmColSplit = false;   // job order, but some lines going into stock
+let confirmColOrder = null;
+let confirmColBusy = false;
+
+// Picks the job an order should land on: the job linked when the order was
+// made, else an open job at the same address (the assigned engineer's first),
+// else a new job at the order's address. Orders marked "into stock", or whose
+// address is just a stock location name like "Yard", go to stock.
+function resolveDeliveryJobChoice(d, jobs, collector) {
+  if (d.destination === 'stock') return '__STOCK__';
+  if (d.jobId && jobs.some(j => j.id === d.jobId)) return d.jobId;
+  const matches = jobs.filter(j => sameJobAddress(j.address, d.customerAddress) || (d.jobAddress && sameJobAddress(j.address, d.jobAddress)));
+  if (matches.length) {
+    const pref = matches.find(j => j.engineerName === d.assignedTo) || matches.find(j => j.engineerName === collector) || matches[0];
+    return pref.id;
+  }
+  if (LOCATIONS.some(l => normJobAddress(l) === normJobAddress(d.customerAddress))) return '__STOCK__';
+  return d.customerAddress ? '__NEW__' : '__STOCK__';
+}
+
+async function fillConfirmColJobSelect(d) {
+  try { confirmColOpenJobs = await fetchOpenJobs(); } catch(e) { console.warn('Open jobs load failed', e); confirmColOpenJobs = []; }
+  const sel = document.getElementById('confirmColJob');
+  const addr = d.customerAddress || '';
+  let html = confirmColOpenJobs.map(j => `<option value="${j.id}">${escJobHtml(j.address)} — ${escJobHtml(j.engineerName || '?')}'s job</option>`).join('');
+  if (addr) html += `<option value="__NEW__">+ Start a new job at ${escJobHtml(addr)}</option>`;
+  html += `<option value="__STOCK__">Not for a job — put it into stock</option>`;
+  sel.innerHTML = html;
+  sel.value = resolveDeliveryJobChoice(d, confirmColOpenJobs, currentUser?.name);
+}
+
+function applyConfirmColMode() {
+  const sel = document.getElementById('confirmColJob');
+  const v = sel ? sel.value : '__STOCK__';
+  const stock = v === '__STOCK__';
+  const d = confirmColOrder || {};
+  const box = document.getElementById('confirmColJobBox');
+  const hint = document.getElementById('confirmColJobHint');
+  const link = document.getElementById('confirmColSplitLink');
+  const btn = document.getElementById('confirmColBtn');
+  const err = document.getElementById('confirmColErr');
+  if (box) { box.style.background = stock ? '#1a2840' : '#0f2e1a'; box.style.borderColor = stock ? '#2a5080' : '#1a4a2a'; }
+  if (hint) {
+    if (stock) hint.textContent = 'Choose a stock location for each item below.';
+    else if (v === '__NEW__') hint.textContent = `A new job will be opened at "${d.customerAddress || ''}" for ${d.assignedTo || 'the engineer who collected it'}, and everything goes onto it. Nothing else to log.`;
+    else hint.textContent = confirmColSplit
+      ? 'Items set to "Onto the job" are assigned to this job; the rest go into the stock location you pick.'
+      : 'Everything on this order is assigned to this job automatically — nothing else to log.';
+  }
+  if (link) {
+    link.style.display = stock ? 'none' : 'inline-block';
+    link.textContent = confirmColSplit ? 'Put everything onto the job' : 'Some of it is going into stock instead?';
+  }
+  document.getElementById('confirmColLocWrap').style.display = (stock || confirmColSplit) ? 'block' : 'none';
+  if (btn) btn.innerHTML = stock ? '✅ Confirm &amp; Add to Stock' : (confirmColSplit ? '✅ Confirm' : '✅ Confirm — Assign to Job');
+  if (err) err.style.display = 'none';
+  rebuildColLocationRows();
+}
+function onConfirmColJobChange() { applyConfirmColMode(); }
+function toggleConfirmColSplit() { confirmColSplit = !confirmColSplit; applyConfirmColMode(); }
+
 async function confirmCollection() {
   const doc = await db.collection('deliveries').doc(currentConfirmDeliveryId).get();
   const d = doc.data();
+  if (!d || d.status !== 'pending') {
+    toast('This order has already been confirmed', 'info');
+    closeModal('confirmCollectionModal'); renderDeliveriesPage(); return;
+  }
   const collectedBy = document.getElementById('confirmColEngineer').value;
+  const jobChoice = document.getElementById('confirmColJob')?.value || '__STOCK__';
+  const jobMode = jobChoice !== '__STOCK__';
+  const rowsShown = !jobMode || confirmColSplit;
+  const pickLoc = key => rowsShown ? document.getElementById(key)?.value : '__JOB__';
 
-  // Build final list: order items with adjusted qtys + extras
-  const qtyInputs = document.querySelectorAll('[id^="colqty-"]');
   const assignments = [];
-
-  // Order items
   ;(d.items||[]).forEach((it,i) => {
     const qty = parseInt(document.getElementById('colqty-'+i)?.value)||0;
     if (qty <= 0) return;
-    const loc = document.getElementById('col-loc-'+i)?.value;
-    assignments.push({itemId:it.itemId, name:it.name, qty, location:loc, extra:false});
+    assignments.push({itemId:it.itemId, name:it.name, qty, location:pickLoc('col-loc-'+i), extra:false});
   });
-
-  // Extra items
   confirmColExtras.forEach((e,ei) => {
     if (!e.itemId||e.qty<=0) return;
-    const loc = document.getElementById('col-extloc-'+ei)?.value;
-    assignments.push({itemId:e.itemId, name:e.name, qty:e.qty, location:loc, extra:true});
+    assignments.push({itemId:e.itemId, name:e.name, qty:e.qty, location:pickLoc('col-extloc-'+ei), extra:true});
   });
 
+  if (!assignments.length) { toast('Nothing to confirm — all quantities are 0', 'error'); return; }
   if (assignments.some(a=>!a.location)) {
     document.getElementById('confirmColErr').style.display='block'; return;
   }
@@ -7439,38 +7798,71 @@ async function confirmCollection() {
 
   try {
     setSync('busy');
-    const usedOnJob = [];
+    const jobLines = assignments.filter(a => a.location === '__JOB__');
+    let target = null;
+    if (jobLines.length) {
+      if (jobChoice === '__NEW__') {
+        const eng = d.assignedTo || collectedBy;
+        const ref = db.collection('jobs').doc();
+        await ref.set({
+          address: d.customerAddress, items: [], deliveryItems: [],
+          engineerUid: jobUidForName(eng), engineerName: eng,
+          status: 'open', isTestData: !!currentUser?.isTester, createdFrom: 'delivery',
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        target = {id: ref.id, address: d.customerAddress, engineerName: eng};
+      } else {
+        const jd = await db.collection('jobs').doc(jobChoice).get();
+        if (!jd.exists || !OPEN_JOB_STATUSES.includes(jd.data().status)) {
+          setSync('ok');
+          toast('That job has just been completed or removed — pick another job', 'error');
+          await fillConfirmColJobSelect(d); applyConfirmColMode();
+          return;
+        }
+        target = {id: jd.id, address: jd.data().address, engineerName: jd.data().engineerName};
+      }
+      // Fixed keys and no timestamps, so a retry can't add the same lines twice.
+      const entries = jobLines.map((a, n) => {
+        const item = items.find(i => i.id === a.itemId);
+        return { key: `${currentConfirmDeliveryId}-${n}`, id: a.itemId, name: item?.name || a.name, barcode: item?.barcode || '',
+          qty: Number(a.qty), deliveryId: currentConfirmDeliveryId, supplier: d.supplier || '', confirmedBy: collectedBy, extra: !!a.extra };
+      });
+      await db.collection('jobs').doc(target.id).update({
+        deliveryItems: firebase.firestore.FieldValue.arrayUnion(...entries),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
     for (const a of assignments) {
+      if (a.location === '__JOB__') continue;
       const item = items.find(i=>i.id===a.itemId);
       if (!item) continue;
-      if (a.location === '__JOB__') {
-        const existing = jobItems.find(j => j.id === a.itemId);
-        if (existing) existing.qty += Number(a.qty);
-        else jobItems.push({ id: a.itemId, name: item.name, barcode: item.barcode||'', qty: Number(a.qty), fromDelivery: true });
-        usedOnJob.push(a);
-        continue;
-      }
       const locs = {...getLocations(item)};
       locs[a.location] = (locs[a.location]||0) + Number(a.qty);
       await db.collection('items').doc(a.itemId).update(locationsUpdatePayload(locs));
     }
-    if (usedOnJob.length) { renderJobItemList(); saveDraftToFirestore(); }
     await db.collection('deliveries').doc(currentConfirmDeliveryId).update({
       status: 'confirmed',
       confirmedBy: collectedBy,
       confirmedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      actualItems: assignments
+      actualItems: assignments,
+      jobId: target ? target.id : null,
+      jobAddress: target ? target.address : null
     });
     const extras = assignments.filter(a=>a.extra);
     await logAction('delivery',
       `Collection confirmed: ${d.customerAddress}`,
-      `${collectedBy} confirmed — ${assignments.map(a=>`${a.name} ×${a.qty} → ${a.location==='__JOB__'?'used directly on job':a.location}${a.extra?' (extra)':''}`).join(', ')}${extras.length?` · ${extras.length} extra item(s) added`:''}`
+      `${collectedBy} confirmed — ${assignments.map(a=>`${a.name} ×${a.qty} → ${a.location==='__JOB__'?'job at '+target.address:a.location}${a.extra?' (extra)':''}`).join(', ')}${extras.length?` · ${extras.length} extra item(s) added`:''}`
     );
     setSync('ok');
     closeModal('confirmCollectionModal');
-    toast(usedOnJob.length ? `Collection confirmed! ${usedOnJob.length} item(s) sent straight to the job.` : 'Collection confirmed! Stock added.','success');
+    const stockCount = assignments.length - jobLines.length;
+    toast(target
+      ? `Confirmed — ${jobLines.length} item(s) assigned to the job at ${target.address}${stockCount ? `, ${stockCount} into stock` : ''}`
+      : 'Collection confirmed! Stock added.', 'success');
     await reloadData();
     renderDeliveriesPage();
+    if (document.getElementById('page-job')?.classList.contains('active')) refreshMyOpenJobs();
   } catch(e) { setSync('err'); toast('Error: '+e.message,'error'); }
 }
 
@@ -7544,7 +7936,9 @@ async function submitJobLeftover() {
 }
 
 function resetJobState() {
-  jobActive = false; jobDraftId = null; jobAddress = ''; jobItems = [];
+  unsubscribeCurrentJob();
+  jobActive = false; jobDraftId = null; jobAddress = ''; jobItems = []; jobDeliveryItems = [];
+  jobListView = false;
   pendingJobCompletionData = null;
   const setup = document.getElementById('jobSetupSection');
   const active = document.getElementById('jobActiveSection');
@@ -7604,6 +7998,9 @@ async function uploadDeliveryPhotos(deliveryId) {
 // Patch confirmCollection to also upload photos
 const _origConfirmCollection = confirmCollection;
 confirmCollection = async function() {
+  if (confirmColBusy) return; // stop a double tap confirming twice
+  confirmColBusy = true;
+  try {
   // Upload photos first, then call original
   if (colPhotoFiles.length && currentConfirmDeliveryId) {
     try {
@@ -7622,6 +8019,7 @@ confirmCollection = async function() {
     }
   }
   await _origConfirmCollection();
+  } finally { confirmColBusy = false; }
 };
 
 // View photos modal
@@ -7671,20 +8069,22 @@ const HELP_GUIDES = [
       { text: 'Tap "Confirm Collection" on that order' },
       { text: 'Check the quantities', sub: 'Edit any number if what arrived is different to what was ordered', decision: 'Got less than ordered? Change the "Got" number to what actually arrived — you can order the rest another time.' },
       { text: 'Add any extra items', sub: 'Anything picked up that wasn\'t on the original order — use "+ Add Extra Item"' },
-      { text: 'Choose a stock location for every item' },
+      { text: 'Check the job shown under "Goes onto job"', sub: 'It is picked for you from the order — change it only if it is wrong', decision: 'Not for a job? Pick "Not for a job — put it into stock" and choose a location for each item. Only some of it for stock? Tap "Some of it is going into stock instead?"' },
       { text: 'Add a photo of the delivery note / receipt (optional but recommended)' },
-      { text: 'Tap "Confirm & Add to Stock"', sub: 'Stock updates immediately and the order moves to "Recently Confirmed"' }
+      { text: 'Tap "Confirm — Assign to Job"', sub: 'Everything goes straight onto the job — nothing else to log. The order moves to "Recently Confirmed"' }
     ]
   },
   {
     icon: '🔧', title: 'Using Stock On a Job (Job Mode)', role: 'engineer',
     steps: [
       { text: 'Open the Job tab' },
-      { text: 'Tap "Start New Job"', sub: 'Or "Resume Draft" if you already started one' },
+      { text: 'Type the address and tap "Start Job"', sub: 'Your open jobs come back by themselves — they stay open until you complete them, however long the job takes' },
+      { text: 'Items from deliveries appear on the job automatically', sub: 'Marked 📦 FROM DELIVERY — you don\'t need to scan them' },
       { text: 'Scan or search each item as you use it', sub: 'Tap "Start Camera" to scan, or type the item name' },
       { text: 'Add it to the Items Used list with the right quantity' },
       { text: 'Repeat for every item used on the job' },
-      { text: 'Tap "Complete Job & Deduct Stock"', decision: 'Got leftover stock from the job? You\'ll be asked where to put it back — fill in a location, or tap "Skip" if there\'s nothing left over.' }
+      { text: 'Need a different job? Tap "☰ My Jobs / New Job"', sub: 'The job stays open — you can come back to it any time' },
+      { text: 'When the job is finished, tap "Complete Job & Deduct Stock"', decision: 'Got leftover stock from the job? You\'ll be asked where to put it back — fill in a location, or tap "Skip" if there\'s nothing left over.' }
     ]
   },
   {
@@ -7769,7 +8169,7 @@ const HELP_GUIDES = [
 function renderProcessOverview() {
   const stages = [
     { icon: '📝', title: 'Quote & Order', role: 'Laura & Dan', desc: 'Job priced up, materials order form created and checked against current stock' },
-    { icon: '🚚', title: 'Receive Stock', role: 'Engineers', desc: 'Delivery confirmed, quantities checked, added to van/yard stock' },
+    { icon: '🚚', title: 'Receive Stock', role: 'Engineers', desc: 'Delivery confirmed, quantities checked, assigned straight to the job (or into van/yard stock)' },
     { icon: '🗄️', title: 'Manage Stock', role: 'Everyone', desc: 'Scanning, stock takes, transfers & corrections keep the numbers accurate day to day' },
     { icon: '🔧', title: 'Do the Job', role: 'Engineers', desc: 'Materials used get logged on site, stock deducts automatically' },
     { icon: '💷', title: 'Cost & Report', role: 'Laura & Dan', desc: 'Job material cost calculated automatically, reviewed in Job Reports' },

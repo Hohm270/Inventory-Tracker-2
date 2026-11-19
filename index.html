@@ -548,6 +548,7 @@ td{padding:8px 9px;vertical-align:middle}
       </div>
 
       <button class="btn btn-primary" style="padding:10px 18px;font-size:13px" onclick="chooseStockTakeLocation()">📋 Start / Continue Stock Take</button>
+      <button class="btn btn-outline admin-only" style="padding:10px 18px;font-size:13px;display:none" onclick="openStockMovementsModal()">⬇ Stock Movements Report</button>
     </div>
   </div>
 
@@ -1435,6 +1436,27 @@ td{padding:8px 9px;vertical-align:middle}
 </div>
 
 <!-- Stock Take -->
+<div class="overlay" id="stockMovementsModal">
+  <div class="modal">
+    <h2>⬇ Stock Movements Report</h2>
+    <p style="font-size:11px;color:#6b8fad;margin-bottom:10px">Every stock change in a period: deliveries, jobs, transfers, returns, adjustments and stock take corrections. Downloads as Excel with a summary per item and a full list.</p>
+    <div class="field" style="margin-bottom:10px"><label>Location</label>
+      <select id="mv-location" onchange="mvSetSinceLastStockTake()" style="width:100%;padding:8px;background:#0f1e30;border:1px solid #2a4060;border-radius:6px;color:#e8edf2;font-size:12px;outline:none"></select></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <div class="field" style="flex:1;min-width:130px"><label>From</label><input type="date" id="mv-from" style="padding:8px;background:#0f1e30;border:1px solid #2a4060;border-radius:6px;color:#e8edf2;font-size:12px;outline:none;width:100%;box-sizing:border-box"></div>
+      <div class="field" style="flex:1;min-width:130px"><label>To</label><input type="date" id="mv-to" style="padding:8px;background:#0f1e30;border:1px solid #2a4060;border-radius:6px;color:#e8edf2;font-size:12px;outline:none;width:100%;box-sizing:border-box"></div>
+    </div>
+    <div id="mvSinceHint" style="font-size:11px;color:#8ab4d8;margin:4px 0 6px"></div>
+    <button class="btn btn-outline" style="padding:5px 10px;font-size:11px" onclick="mvSetSinceLastStockTake()">↺ Since last stock take</button>
+    <div id="mvStarted" style="font-size:10px;color:#4a6880;margin-top:10px"></div>
+    <div id="mvErr" style="display:none;color:#ff6b6b;font-size:12px;margin-top:8px"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('stockMovementsModal')">Close</button>
+      <button class="btn btn-primary" id="mvDownloadBtn" onclick="downloadStockMovements()">⬇ Download report</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="stSheetReviewModal" style="z-index:1200">
   <div class="modal lg">
     <h2>⬆ Count sheet — check before applying</h2>
@@ -2160,6 +2182,7 @@ async function confirmUseStock() {
   setSync('busy');
   try {
     await db.collection('items').doc(useStockItemId).update(locationsUpdatePayload(newLocs));
+    recordStockMovement(item, locs, newLocs, { type: 'Used', ref: job });
     await logAction('qty', `Stock used: ${item.name}${job?' ('+job+')':''}`,
       `${currentUser.name} used ${qty} unit${qty!==1?'s':''} of ${item.name} from ${fromLoc}${job?' · Job: '+job:''} · ${fromLoc}: ${available} → ${available-qty}`);
     await recordMyAction({ type: 'use', itemId: useStockItemId, itemName: item.name, location: fromLoc, qty, job });
@@ -2254,6 +2277,7 @@ async function confirmTransfer() {
   setSync('busy');
   try {
     await db.collection('items').doc(transferItemId).update(locationsUpdatePayload(newLocs));
+    recordStockMovement(item, locs, newLocs, { type: 'Transfer', note: `${fromLoc} → ${toLoc}${note ? ' · ' + note : ''}` });
     await db.collection('transfers').add({
       itemId: transferItemId, itemName: item.name, qty, fromLoc, toLoc, note,
       transferredBy: currentUser.name, transferredAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -2430,6 +2454,8 @@ async function resolveMigrationDuplicate(groupIndex, keepBarcode) {
       });
     });
     await db.collection('items').doc(keeper.id).update(locationsUpdatePayload(mergedLocations));
+    recordStockMovement(keeper, keeper.locations || {}, mergedLocations, { type: 'Merged duplicate', note: 'Stock moved in from ' + others.map(o => o.barcode).join(', ') });
+    for (const o of others) recordStockMovement(o, o.locations || {}, {}, { type: 'Merged duplicate', note: 'Stock moved to ' + keeper.barcode + '; this barcode removed' });
     for (const o of others) await db.collection('items').doc(o.id).delete();
     await logAction('del', `Migration duplicate resolved: ${g.description}`,
       `${currentUser.name} kept barcode ${keeper.barcode}, removed ${others.map(o=>o.barcode).join(', ')} — stock merged`);
@@ -2569,6 +2595,7 @@ async function confirmReturnStock() {
       isTestData: !!currentUser?.isTester
     });
     await db.collection('items').doc(returnItemId).update(locationsUpdatePayload(newLocs));
+    recordStockMovement(item, locs, newLocs, { type: 'Returned to supplier', ref: refNum, note: `${supplier ? supplier + ' · ' : ''}${reason}` });
     if (!currentUser?.isTester) {
       await logAction('return', `Returned to supplier: ${item.name}`,
         `${currentUser.name} returned ${qty} unit${qty!==1?'s':''} of ${item.name} from ${fromLoc}${supplier?' to '+supplier:''} — Reason: ${reason} · Ref: ${refNum} · ${fromLoc}: ${available} → ${available-qty}`);
@@ -2641,6 +2668,7 @@ async function confirmAdjust() {
   setSync('busy');
   try {
     await db.collection('items').doc(adjustItemId).update(locationsUpdatePayload(newLocs));
+    recordStockMovement(item, oldLocs, newLocs, { type: 'Adjustment', note: reason });
     const detail = `${currentUser.name} corrected quantities — ${changes.join(', ')}${reason?' · Reason: '+reason:''}`;
     await logAction('edit', `Stock corrected: ${item.name}`, detail);
     setSync('ok');
@@ -2994,6 +3022,7 @@ async function confirmUnregisteredItem() {
     };
     if (isTester) itemPayload.testLocations = { [loc]: qty };
     const ref = await db.collection('items').add(itemPayload);
+    recordStockMovement({...itemPayload, id: ref.id}, {}, { [loc]: qty }, { type: 'Unregistered item logged', ref: (typeof jobActive !== 'undefined' && jobActive && jobAddress) ? jobAddress : '' });
     if (!isTester) {
       await logAction('add', `Unregistered item logged: ${name}`, `${currentUser.name} logged ${qty} of "${name}" at ${loc} as unregistered — needs admin to complete full details (category, code, pricing)`);
     }
@@ -3163,10 +3192,16 @@ async function saveItem() {
       sups[s.name] = { code:s.code||'', code_display:cc, price:parseFloat(s.price)||0, min_order:s.min_order||'', site:SUPPLIER_SITES[s.name]||'', url:cc&&base?base+encodeURIComponent(cc):'' };
     }
   });
-  const locations = {};
+  // On edit, a stock box left as it was keeps its figure — including a
+  // negative one, so renaming an item can't silently wipe a negative flag.
+  const editingItem = editId ? items.find(i => i.id === editId) : null;
+  const oldFormLocs = editingItem ? (editingItem.locations || {}) : {};
+  const locations = editingItem ? {...oldFormLocs} : {};
   document.querySelectorAll('.f-loc-input').forEach(inp => {
-    const v = Math.max(0, parseInt(inp.value)||0);
-    if (v > 0) locations[inp.dataset.loc] = v;
+    const loc = inp.dataset.loc, old = Number(oldFormLocs[loc] || 0);
+    const typed = parseInt(inp.value);
+    const v = (editingItem && (isNaN(typed) ? 0 : typed) === old) ? old : Math.max(0, typed || 0);
+    if (v !== 0) locations[loc] = v; else delete locations[loc];
   });
   const barcode = document.getElementById('f-barcode').value.trim() || generateBarcodeValue();
   const payload = { name, category:cat, brand, range, type, mainConnectionType, attrA, connectionTypeB, attrB, connectionTypeC, attrC, colour, material,
@@ -3178,9 +3213,11 @@ async function saveItem() {
     if (editId) {
       const wasUnregistered = items.find(i => i.id === editId)?.unregistered;
       await db.collection('items').doc(editId).update({...payload, syncedToMaster: false, unregistered: false, qty: firebase.firestore.FieldValue.delete()});
+      recordStockMovement({...editingItem, ...payload, id: editId}, oldFormLocs, locations, { type: 'Item edited', note: 'Stock changed in the Edit Item form' });
       await logAction('edit', wasUnregistered ? `Unregistered item completed: ${name}` : 'Item edited: '+name, wasUnregistered ? `${currentUser.name} filled in full details — no longer flagged as unregistered` : 'By '+currentUser.name);
     } else {
       const ref = await db.collection('items').add(payload);
+      recordStockMovement({...payload, id: ref.id}, {}, locations, { type: 'Opening stock (new item)' });
       await logAction('add', 'Item added: '+name, 'By '+currentUser.name);
       if (pendingMinvRowIndex !== null && manualInvoiceItems[pendingMinvRowIndex]) {
         manualInvoiceItems[pendingMinvRowIndex].itemId = ref.id;
@@ -3438,6 +3475,7 @@ async function confirmCorrectAction() {
       logDetail = `${currentUser.name} corrected an earlier "Used ${a.qty}" entry${a.type==='job'?' from the job at '+a.job:''} to ${newQty} — Reason: ${reason} · ${loc}: ${before} → ${after}`;
     }
     await db.collection('items').doc(a.itemId).update(locationsUpdatePayload(newLocs));
+    recordStockMovement(item, locs, newLocs, { type: 'Correction', ref: a.job || '', note: reason });
     await db.collection('myActions').doc(correctingActionId).update({ corrected: true, correctedTo: newQty, correctedReason: reason, correctedAt: firebase.firestore.FieldValue.serverTimestamp() });
     if (!currentUser?.isTester) {
       await logAction('edit', `Correction: ${item.name}`, logDetail);
@@ -3610,6 +3648,167 @@ let stockTakeExtra = {}; // {itemId: true} — items manually added to a locatio
 let currentStockTakeId = ''; // Firestore doc id of the in-progress/current cycle
 let currentStockTakeLocation = null; // null = whole business (legacy); otherwise a single location name
 const STOCKTAKE_CYCLE_MONTHS = 6;
+
+// ════════════════════════════════════════
+//  STOCK MOVEMENTS
+//  Every change to a stock figure also writes one row per location to the
+//  'movements' collection: what changed, by how much, why, and who did it.
+//  Recording never blocks the action itself — if it fails, the stock change
+//  still stands and a warning goes to the console.
+// ════════════════════════════════════════
+function stockMovementRows(item, before, after, meta) {
+  if (!item) return [];
+  const b0 = before || {}, a0 = after || {};
+  const rows = [];
+  new Set([...Object.keys(b0), ...Object.keys(a0)]).forEach(loc => {
+    const b = Number(b0[loc] || 0), a = Number(a0[loc] || 0);
+    if (a === b) return;
+    rows.push({
+      at: Date.now(), ts: firebase.firestore.FieldValue.serverTimestamp(),
+      itemId: item.id || '', itemName: item.name || '', barcode: item.barcode || '', category: item.category || '',
+      location: loc, change: a - b, before: b, after: a,
+      type: meta?.type || 'Other', reference: meta?.ref || '', note: meta?.note || '',
+      user: currentUser?.name || 'System', isTestData: !!currentUser?.isTester
+    });
+  });
+  return rows;
+}
+async function recordStockMovement(item, before, after, meta) {
+  try {
+    const rows = stockMovementRows(item, before, after, meta);
+    if (!rows.length) return;
+    const batch = db.batch();
+    rows.forEach(r => batch.set(db.collection('movements').doc(), r));
+    await batch.commit();
+  } catch (e) { console.warn('Stock movement not recorded:', e); }
+}
+function addMovementsToBatch(batch, item, before, after, meta) {
+  const rows = stockMovementRows(item, before, after, meta);
+  rows.forEach(r => batch.set(db.collection('movements').doc(), r));
+  return rows.length;
+}
+
+// Buckets used for the summary sheet's columns
+const MOVEMENT_BUCKETS = [
+  ['Deliveries & invoices', t => /^(Delivery|Invoice)/.test(t)],
+  ['Used (jobs & scans)', t => /^Used/.test(t)],
+  ['Leftovers back from jobs', t => /^Job leftovers/.test(t)],
+  ['Returned to supplier', t => /^Returned/.test(t)],
+  ['Adjustments & corrections', t => /^(Adjustment|Correction|Item edited)/.test(t)],
+  ['Stock take changes', t => /^Stock take/.test(t)],
+];
+
+async function openStockMovementsModal() {
+  const sel = document.getElementById('mv-location');
+  sel.innerHTML = '<option value="">All locations</option>' + LOCATIONS.map(l => `<option value="${l.replace(/"/g,'&quot;')}">${l}</option>`).join('');
+  const today = new Date().toISOString().slice(0, 10);
+  document.getElementById('mv-to').value = today;
+  document.getElementById('mv-from').value = today;
+  document.getElementById('mvErr').style.display = 'none';
+  document.getElementById('mvStarted').textContent = '';
+  document.getElementById('stockMovementsModal').classList.add('open');
+  try {
+    const first = await db.collection('movements').orderBy('at').limit(1).get();
+    document.getElementById('mvStarted').textContent = first.empty
+      ? 'No stock movements recorded yet — recording starts from this update.'
+      : `Stock movements have been recorded since ${fmtDate(new Date(first.docs[0].data().at))}. Earlier history is only in the Log tab.`;
+  } catch (e) { console.warn(e); }
+  await mvSetSinceLastStockTake();
+}
+
+// Sets the From date to the last completed stock take for the chosen location
+async function mvSetSinceLastStockTake() {
+  const loc = document.getElementById('mv-location').value || null;
+  const hint = document.getElementById('mvSinceHint');
+  try {
+    const snap = await db.collection('stocktakes').where('completed', '==', true).get();
+    const last = snap.docs.map(d => d.data())
+      .filter(s => (s.location || null) === loc && s.completedAt?.toDate && !s.isTestData)
+      .sort((a, b) => b.completedAt.toMillis() - a.completedAt.toMillis())[0];
+    if (last) {
+      const d = last.completedAt.toDate();
+      document.getElementById('mv-from').value = d.toISOString().slice(0, 10);
+      hint.textContent = `From the last completed stock take${loc ? ' of ' + loc : ' (all locations)'}: ${fmtDate(d)}.`;
+    } else {
+      hint.textContent = `No completed stock take found${loc ? ' for ' + loc : ' for all locations'} — choose the dates yourself.`;
+    }
+  } catch (e) { hint.textContent = ''; console.warn(e); }
+}
+
+async function downloadStockMovements() {
+  const errEl = document.getElementById('mvErr');
+  const loc = document.getElementById('mv-location').value || null;
+  const fromStr = document.getElementById('mv-from').value, toStr = document.getElementById('mv-to').value;
+  if (!fromStr || !toStr) { errEl.textContent = 'Choose both dates.'; errEl.style.display = 'block'; return; }
+  const from = new Date(fromStr + 'T00:00:00'), to = new Date(toStr + 'T23:59:59.999');
+  if (to < from) { errEl.textContent = 'The To date is before the From date.'; errEl.style.display = 'block'; return; }
+  errEl.style.display = 'none';
+  const btn = document.getElementById('mvDownloadBtn');
+  btn.disabled = true; btn.textContent = '⏳ Building report…';
+  try {
+    const snap = await db.collection('movements').where('at', '>=', from.getTime()).where('at', '<=', to.getTime()).get();
+    const tester = !!currentUser?.isTester;
+    const rows = snap.docs.map(d => d.data())
+      .filter(r => !!r.isTestData === tester && (!loc || r.location === loc))
+      .sort((a, b) => a.at - b.at);
+    if (!rows.length) {
+      errEl.textContent = `No stock movements between ${fmtDate(from)} and ${fmtDate(to)}${loc ? ' for ' + loc : ''}.`;
+      errEl.style.display = 'block'; return;
+    }
+    const dd = ms => { const d = new Date(ms); return d.toLocaleDateString('en-GB'); };
+    const tt = ms => { const d = new Date(ms); return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); };
+
+    // Summary: one line per item per location
+    const groups = {};
+    rows.forEach(r => {
+      const k = r.itemId + '|' + r.location;
+      const g = groups[k] = groups[k] || { r, opening: r.before, closing: r.after, buckets: {}, tin: 0, tout: 0, other: 0 };
+      g.closing = r.after;
+      if (r.type === 'Transfer') { if (r.change > 0) g.tin += r.change; else g.tout += r.change; return; }
+      const b = MOVEMENT_BUCKETS.find(([, test]) => test(r.type));
+      if (b) g.buckets[b[0]] = (g.buckets[b[0]] || 0) + r.change; else g.other += r.change;
+    });
+    const head = ['Item', 'Category', 'Barcode', 'Location', 'Opening figure', ...MOVEMENT_BUCKETS.slice(0, 1).map(b => b[0]), 'Transfers in', 'Transfers out',
+      ...MOVEMENT_BUCKETS.slice(1).map(b => b[0]), 'Other', 'Net change', 'Closing figure', 'App figure now'];
+    const summary = [
+      ['Stock Movements Report'],
+      ['Location', loc || 'All locations'],
+      ['Period', `${fmtDate(from)} to ${fmtDate(to)}`],
+      ['Produced', `${fmtDate(new Date())} by ${currentUser?.name || ''}`],
+      ['How to read', 'Opening = the figure before the first movement in the period. Closing = the figure after the last one. Opening + every column = Closing.'],
+      [],
+      head
+    ];
+    const headRow = summary.length - 1;
+    Object.values(groups)
+      .sort((a, b) => (a.r.itemName || '').localeCompare(b.r.itemName || '') || a.r.location.localeCompare(b.r.location))
+      .forEach(g => {
+        const item = items.find(i => i.id === g.r.itemId);
+        const now = item ? (getLocations(item)[g.r.location] || 0) : '';
+        summary.push([item?.name || g.r.itemName, item?.category || g.r.category, item?.barcode || g.r.barcode, g.r.location, g.opening,
+          g.buckets[MOVEMENT_BUCKETS[0][0]] || 0, g.tin, g.tout,
+          ...MOVEMENT_BUCKETS.slice(1).map(b => g.buckets[b[0]] || 0), g.other, g.closing - g.opening, g.closing, now]);
+      });
+    const wsS = XLSX.utils.aoa_to_sheet(summary);
+    wsS['!cols'] = [{ wch: 48 }, { wch: 22 }, { wch: 14 }, { wch: 13 }, ...head.slice(4).map(() => ({ wch: 13 }))];
+    wsS['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: headRow, c: 0 }, e: { r: summary.length - 1, c: head.length - 1 } }) };
+
+    // Every movement, oldest first
+    const detail = [['Date', 'Time', 'Item', 'Category', 'Barcode', 'Location', 'Type', 'Change', 'Before', 'After', 'Reference', 'Note', 'By']];
+    rows.forEach(r => detail.push([dd(r.at), tt(r.at), r.itemName, r.category, r.barcode, r.location, r.type, r.change, r.before, r.after, r.reference, r.note, r.user]));
+    const wsD = XLSX.utils.aoa_to_sheet(detail);
+    wsD['!cols'] = [{ wch: 11 }, { wch: 7 }, { wch: 48 }, { wch: 22 }, { wch: 14 }, { wch: 13 }, { wch: 22 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 30 }, { wch: 40 }, { wch: 10 }];
+    wsD['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: detail.length - 1, c: 12 } }) };
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, wsS, 'Summary');
+    XLSX.utils.book_append_sheet(wb, wsD, 'All movements');
+    XLSX.writeFile(wb, `Stock_Movements_${(loc || 'All_Locations').replace(/[^A-Za-z0-9]+/g, '_')}_${fromStr}_to_${toStr}.xlsx`);
+    toast(`Downloaded ${rows.length} movement${rows.length !== 1 ? 's' : ''}`, 'success');
+  } catch (e) {
+    errEl.textContent = 'Could not build the report: ' + e.message; errEl.style.display = 'block';
+  } finally { btn.disabled = false; btn.textContent = '⬇ Download report'; }
+}
 
 function fmtDate(d) {
   return d.toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
@@ -4153,6 +4352,7 @@ async function updateStockTakeQty(itemId, loc, val) {
   setSync('busy');
   try {
     await db.collection('items').doc(itemId).update(locationsUpdatePayload(newLocs));
+    recordStockMovement(item, locs, newLocs, { type: 'Stock take', ref: currentStockTakeLocation || 'All locations' });
     // Reflect the save locally straight away so a second box on the same item
     // (All Locations view) builds on this figure rather than the old one.
     if (currentUser?.isTester) item.testLocations = newLocs; else item.locations = newLocs;
@@ -4319,17 +4519,19 @@ async function applyStockTakeSheet() {
   const entries = Object.values(stSheetPlan.perItem);
   let done = 0, changed = 0;
   try {
-    // Up to 100 items per batch: each item is at most 1 stock write + 1 log
-    // line per location, well inside Firestore's 500-operation limit.
-    for (let i = 0; i < entries.length; i += 100) {
+    // Up to 60 items per batch: each item is at most 1 stock write plus a log
+    // line and a movement row per location (7 with three locations) — inside
+    // Firestore's 500-operation limit.
+    for (let i = 0; i < entries.length; i += 60) {
       const batch = db.batch(), applied = [];
-      entries.slice(i, i + 100).forEach(({ item, counts }) => {
+      entries.slice(i, i + 60).forEach(({ item, counts }) => {
         const fresh = items.find(x => x.id === item.id) || item;
         const cur = getLocations(fresh), newLocs = { ...cur };
         const diffs = Object.entries(counts).filter(([loc, n]) => (cur[loc] || 0) !== n);
         diffs.forEach(([loc, n]) => { newLocs[loc] = n; });
         if (diffs.length) {
           batch.update(db.collection('items').doc(item.id), locationsUpdatePayload(newLocs));
+          addMovementsToBatch(batch, fresh, cur, newLocs, { type: 'Stock take', ref: currentStockTakeLocation || 'All locations', note: 'Count sheet upload' });
           if (!currentUser?.isTester) diffs.forEach(([loc, n]) => batch.set(db.collection('log').doc(), {
             type: 'qty', title: `Stock take update: ${fresh.name}`,
             detail: `${currentUser.name} corrected ${loc} from ${cur[loc] || 0} to ${n} during stock take`,
@@ -4478,6 +4680,7 @@ async function applyManualInvoiceToStock() {
       const oldVal = locs[toLoc]||0, newVal = oldVal + Number(row.qty);
       // locationsUpdatePayload keeps practice-mode counts away from real stock
       await db.collection('items').doc(row.itemId).update(locationsUpdatePayload({...locs, [toLoc]: newVal}));
+      recordStockMovement(item, locs, {...locs, [toLoc]: newVal}, { type: 'Invoice', ref, note: supplier });
       if (!currentUser?.isTester) await logAction('invoice', `Invoice: ${item.name}`, `${currentUser.name} added ${row.qty} to ${toLoc}${supplier?' · Supplier: '+supplier:''}${ref?' · Ref: '+ref:''} · ${oldVal}→${newVal}`);
     }
     setSync('ok');
@@ -5276,8 +5479,10 @@ async function applyDuplicateCleanup() {
         });
       }
       await db.collection('items').doc(keeper.id).update({ locations: mergedLocations, qty: firebase.firestore.FieldValue.delete() });
+      recordStockMovement(keeper, keeper.locations || {}, mergedLocations, { type: 'Merged duplicate', note: 'Duplicate clean-up' });
       for (let i = 0; i < g.items.length; i++) {
         if (i === g.keepIndex) continue;
+        recordStockMovement(g.items[i], g.items[i].locations || {}, {}, { type: 'Merged duplicate', note: 'Stock moved to ' + (keeper.barcode || keeper.name) + '; duplicate removed' });
         await db.collection('items').doc(g.items[i].id).delete();
       }
     }
@@ -6317,6 +6522,7 @@ async function confirmScanUse(itemId) {
   setSync('busy');
   try {
     await db.collection('items').doc(itemId).update(locationsUpdatePayload(newLocs));
+    recordStockMovement(item, locs, newLocs, { type: 'Used (scan)', ref: job });
     await logAction('qty', `Stock used (scan): ${item.name}${job?' ('+job+')':''}`,
       `${currentUser.name} scanned & used ${qty} from ${loc}${job?' · Job: '+job:''} · ${available}→${available-qty}`);
     await recordMyAction({ type: 'use', itemId, itemName: item.name, location: loc, qty, job });
@@ -6339,6 +6545,7 @@ async function confirmScanAdd(itemId) {
   setSync('busy');
   try {
     await db.collection('items').doc(itemId).update(locationsUpdatePayload(newLocs));
+    recordStockMovement(item, locs, newLocs, { type: 'Added (scan)' });
     await logAction('qty', `Stock added (scan): ${item.name}`,
       `${currentUser.name} scanned & added ${qty} to ${loc} · ${current}→${current+qty}`);
     setSync('ok');
@@ -6958,6 +7165,7 @@ async function completeJob() {
       if (newLocs[useLoc] < 0) wentNegative.push(`${ji.name} (${useLoc}: ${newLocs[useLoc]})`);
       if (newLocs[useLoc] === 0) delete newLocs[useLoc];
       await db.collection('items').doc(ji.id).update(locationsUpdatePayload(newLocs));
+      recordStockMovement(item, locs, newLocs, { type: 'Used on job', ref: jobAddress });
       await recordMyAction({ type: 'job', itemId: ji.id, itemName: item.name, location: useLoc, qty: ji.qty, job: jobAddress });
     }
 
@@ -7860,9 +8068,11 @@ async function confirmCollection() {
       if (a.location === '__JOB__') continue;
       const item = items.find(i=>i.id===a.itemId);
       if (!item) continue;
-      const locs = {...getLocations(item)};
+      const before = getLocations(item);
+      const locs = {...before};
       locs[a.location] = (locs[a.location]||0) + Number(a.qty);
       await db.collection('items').doc(a.itemId).update(locationsUpdatePayload(locs));
+      recordStockMovement(item, before, locs, { type: 'Delivery', ref: d.customerAddress || '', note: `${d.supplier ? d.supplier + ' · ' : ''}confirmed by ${collectedBy}${a.extra ? ' · extra item' : ''}` });
     }
     await db.collection('deliveries').doc(currentConfirmDeliveryId).update({
       status: 'confirmed',
@@ -7942,9 +8152,11 @@ async function submitJobLeftover() {
       for (const r of returns) {
         const item = items.find(it=>it.id===r.id);
         if (!item) continue;
-        const locs = {...getLocations(item)};
+        const before = getLocations(item);
+        const locs = {...before};
         locs[r.returnLoc] = (locs[r.returnLoc]||0) + r.returnQty;
         await db.collection('items').doc(r.id).update(locationsUpdatePayload(locs));
+        recordStockMovement(item, before, locs, { type: 'Job leftovers returned', ref: jobAddress });
       }
       await logAction('job', `Leftover stock returned: ${jobAddress}`,
         returns.map(r=>`${r.name} ×${r.returnQty} → ${r.returnLoc}`).join(', '));

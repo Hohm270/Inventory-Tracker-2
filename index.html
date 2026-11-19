@@ -730,6 +730,7 @@ td{padding:8px 9px;vertical-align:middle}
             </div>
             <div style="display:flex;gap:6px">
               <button class="btn btn-success" style="padding:6px 11px;font-size:12px" onclick="syncOneDriveNow()">🔄 Sync Now</button>
+              <button class="btn btn-outline" style="padding:6px 11px;font-size:12px" onclick="compareAppWithExcel()">🔍 Compare App vs Excel</button>
               <button class="btn btn-ghost" style="padding:6px 11px;font-size:11px" onclick="disconnectOneDrive()">Disconnect</button>
             </div>
           </div>
@@ -1436,6 +1437,17 @@ td{padding:8px 9px;vertical-align:middle}
 </div>
 
 <!-- Stock Take -->
+<div class="overlay" id="odCompareModal">
+  <div class="modal">
+    <h2>🔍 App vs Excel</h2>
+    <div id="odCompareBody" style="font-size:12px;color:#c8d8e8;line-height:1.6">Reading Excel…</div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('odCompareModal')">Close</button>
+      <button class="btn btn-primary" id="odCompareDlBtn" style="display:none" onclick="downloadAppExcelComparison()">⬇ Download full list</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="stockMovementsModal">
   <div class="modal">
     <h2>⬇ Stock Movements Report</h2>
@@ -5685,6 +5697,11 @@ function odRowValuesFromItem(item, headerRaw, cols) {
     if (d) { if (sc.codeIdx !== -1) values[sc.codeIdx] = d.code || ''; if (sc.priceIdx !== -1) values[sc.priceIdx] = d.price ?? ''; }
   });
   put(cols.appBarcode, item.barcode);
+  // Codes made only of digits with a leading zero (Vaillant 0020209505 etc.)
+  // or longer than Excel can hold as a number would be turned into numbers
+  // and lose digits — an apostrophe in front makes Excel keep them as text.
+  const keepText = v => (typeof v === 'string' && /^\d+$/.test(v) && (v[0] === '0' || v.length > 15)) ? "'" + v : v;
+  [cols.mfrCode, ...cols.supplierCols.map(sc => sc.codeIdx)].forEach(i => { if (i != null && i > -1) values[i] = keepText(values[i]); });
   return values;
 }
 
@@ -6005,6 +6022,75 @@ async function applyExcelBackfill() {
     prog.textContent = 'Failed partway: ' + e.message + ' — tap "Check What Would Be Filled In" again; anything already done won\'t be repeated.';
   }
   btn.disabled = false;
+}
+
+
+// ════════════════════════════════════════
+//  APP vs EXCEL COMPARISON (read-only)
+//  Explains why the app's item count and Excel's row count differ, item by
+//  item. Reads Excel only — never writes to it or to the app.
+// ════════════════════════════════════════
+let odCompareResult = null;
+async function compareAppWithExcel() {
+  const esc = v => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const body = document.getElementById('odCompareBody'), dl = document.getElementById('odCompareDlBtn');
+  body.textContent = 'Reading Excel…'; dl.style.display = 'none';
+  document.getElementById('odCompareModal').classList.add('open');
+  let token = null, sessionId = null;
+  try {
+    token = await getGraphToken();
+    sessionId = await odCreateSession(token);
+    const found = await odFindLayoutSheet(token, sessionId);
+    await odCloseSession(token, sessionId); sessionId = null;
+    const excelRows = found.rows;
+    const offset = found.grid.rowOffset || 0;
+    const xlRowNo = r => r.rowIndex + offset + 1; // the row number Excel shows
+    const byBc = {};
+    excelRows.forEach(r => { if (r.appBarcode) (byBc[r.appBarcode] = byBc[r.appBarcode] || []).push(r); });
+    const appByBc = {};
+    items.forEach(i => { if (i.barcode) appByBc[i.barcode] = i; });
+
+    const inAppOnly = items.filter(i => !i.barcode || !byBc[i.barcode]).map(i => ({ item: i,
+      reason: i.isTestData ? 'Practice/test item — never goes to Excel'
+        : i.unregistered ? 'Unregistered (logged by an engineer) — an admin needs to open it, complete the details and save; the next sync then adds it'
+        : !i.barcode ? 'Has no barcode yet — the next Sync Now → Apply gives it one and adds it'
+        : 'Not in Excel yet — the next Sync Now → Apply adds it' }));
+    const inExcelOnly = excelRows.filter(r => r.appBarcode && !appByBc[r.appBarcode]);
+    const noBarcode = excelRows.filter(r => !r.appBarcode);
+    const dupBc = Object.entries(byBc).filter(([, rs]) => rs.length > 1);
+    odCompareResult = { sheet: found.name, excelRows, inAppOnly, inExcelOnly, noBarcode, dupBc, xlRowNo };
+
+    const byReason = {};
+    inAppOnly.forEach(x => { const k = x.reason.split(' — ')[0]; byReason[k] = (byReason[k] || 0) + 1; });
+    const lastRow = excelRows.length ? xlRowNo(excelRows[excelRows.length - 1]) : 0;
+    body.innerHTML = `
+      <div><b>App:</b> ${items.length} items</div>
+      <div><b>Excel</b> (tab "${esc(found.name)}"): ${excelRows.length} product rows — the last one is row ${lastRow}, and the header row isn't counted</div>
+      <div style="margin-top:8px"><b>${inAppOnly.length}</b> app item${inAppOnly.length !== 1 ? 's are' : ' is'} not in Excel${inAppOnly.length ? ':' : ''}</div>
+      ${Object.entries(byReason).map(([k, n]) => `<div style="padding-left:12px">• ${n} × ${esc(k)}</div>`).join('')}
+      <div style="margin-top:6px"><b>${inExcelOnly.length}</b> Excel row${inExcelOnly.length !== 1 ? 's have' : ' has'} a barcode that isn't in the app (deleted or merged in the app)</div>
+      <div><b>${noBarcode.length}</b> Excel row${noBarcode.length !== 1 ? 's have' : ' has'} no barcode yet (the next sync offers to add ${noBarcode.length !== 1 ? 'them' : 'it'} to the app)</div>
+      <div><b>${dupBc.length}</b> barcode${dupBc.length !== 1 ? 's appear' : ' appears'} on more than one Excel row</div>
+      <div style="margin-top:8px;font-size:11px;color:#6b8fad">Nothing has been changed. Download the full list to see every item by name and Excel row number.</div>`;
+    dl.style.display = '';
+  } catch (e) {
+    if (token && sessionId) await odCloseSession(token, sessionId).catch(() => {});
+    body.textContent = 'Could not read Excel: ' + e.message;
+  }
+}
+function downloadAppExcelComparison() {
+  const c = odCompareResult; if (!c) return;
+  const wb = XLSX.utils.book_new();
+  const add = (name, aoa, widths) => { const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = widths.map(w => ({ wch: w })); XLSX.utils.book_append_sheet(wb, ws, name); };
+  add('In app not Excel', [['Item', 'Category', 'Barcode', 'Why it is not in Excel', 'Total stock'],
+    ...c.inAppOnly.map(x => [x.item.name, x.item.category || '', x.item.barcode || '', x.reason, Object.values(getLocations(x.item) || {}).reduce((s, v) => s + Number(v || 0), 0)])], [48, 22, 14, 70, 11]);
+  add('In Excel not app', [['Excel row', 'Description', 'Category', 'App Barcode'],
+    ...c.inExcelOnly.map(r => [c.xlRowNo(r), r.description, r.category, r.appBarcode])], [10, 52, 22, 14]);
+  add('Excel no barcode', [['Excel row', 'Description', 'Category'],
+    ...c.noBarcode.map(r => [c.xlRowNo(r), r.description, r.category])], [10, 52, 22]);
+  add('Excel duplicate barcodes', [['App Barcode', 'Excel rows', 'Description'],
+    ...c.dupBc.map(([bc, rs]) => [bc, rs.map(c.xlRowNo).join(', '), rs[0].description])], [14, 18, 52]);
+  XLSX.writeFile(wb, `App_vs_Excel_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
 let odSyncData = null; // working state between syncOneDriveNow() and applyOneDriveSync()
